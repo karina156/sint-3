@@ -1,0 +1,76 @@
+/* =========================================================
+   animations.css — motion language
+   spring · overshoot · soft fade · subtle jitter
+   (physics-driven motion lives in scripts/interactions.js)
+   ========================================================= */
+
+/* good! — pops in with overshoot, lives ~4.5 s, fades softly */
+.good-pop {
+  animation: good-in .55s var(--ease-spring) both;
+}
+.good-pop.is-out {
+  animation: good-out .9s var(--ease-soft) forwards;
+}
+.good-pop.is-out.is-fast {
+  animation-duration: .3s;
+}
+@keyframes good-in {
+  0%   { opacity: 0; scale: .35; }
+  60%  { opacity: 1; }
+  100% { opacity: 1; scale: 1; }
+}
+@keyframes good-out {
+  0%   { opacity: 1; translate: -50% -50%; }
+  100% { opacity: 0; translate: -50% calc(-50% - 14px); }
+}
+
+/* "+" corner invites a tap when the scene holds armed voices but is silent */
+.corner.is-calling {
+  animation: corner-call 1.6s var(--ease-soft) infinite;
+}
+@keyframes corner-call {
+  0%, 100% { scale: 1; background-color: transparent; }
+  18%      { scale: 1.16; background-color: rgba(46, 46, 46, .12); }
+  34%      { scale: .97; }
+  48%      { scale: 1.02; background-color: transparent; }
+}
+
+/* small tap feedback on parts (WAAPI handles beat pulses) */
+.part.is-pressed { scale: .965; transition: scale .12s var(--ease-out); }
+
+/* FX dots wobble while their loop runs */
+.body--fx.is-on .main {
+  animation: fx-wobble 2.4s ease-in-out infinite;
+}
+.body--fx:nth-of-type(2n).is-on .main { animation-duration: 2.9s; }
+.body--fx:nth-of-type(3n).is-on .main { animation-duration: 2.1s; }
+@keyframes fx-wobble {
+  0%, 100% { border-radius: 50%; }
+  25%      { border-radius: 46% 54% 52% 48% / 52% 47% 53% 48%; }
+  50%      { border-radius: 53% 47% 47% 53% / 47% 53% 47% 53%; }
+  75%      { border-radius: 48% 52% 54% 46% / 53% 48% 52% 47%; }
+}
+
+/* circle breathes (tiny deformation) while the soft synth plays */
+.body--circle.is-on .main {
+  animation: soft-breathe 3.6s ease-in-out infinite;
+}
+@keyframes soft-breathe {
+  0%, 100% { border-radius: 50%; }
+  33%      { border-radius: 49% 51% 50% 50% / 51% 49% 51% 49%; }
+  66%      { border-radius: 51% 49% 49% 51% / 49% 51% 50% 50%; }
+}
+
+/* oval child voice — gentle drift */
+.body--oval.is-on .main {
+  animation: soft-breathe 2.8s ease-in-out infinite reverse;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .good-pop, .good-pop.is-out { animation-duration: .01s; }
+  .corner.is-calling,
+  .body--fx.is-on .main,
+  .body--circle.is-on .main,
+  .body--oval.is-on .main { animation: none; }
+  .ring, .ghost, .capsule-dot, .capsule-back { transition-duration: .01s; }
+}

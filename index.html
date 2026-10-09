@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>web synthesizer — geometric performance</title>
+    <meta
+      name="description"
+      content="Experimental web synthesizer: an interactive poster you can play."
+    />
+    <meta name="theme-color" content="#2fe959" />
+
+    <!-- Evolventa is the Figma font. It is used if installed locally or placed in /fonts
+       (see styles/main.css). Jost is the closest geometric fallback; line widths are
+       locked to the Figma metrics via SVG textLength, so the composition holds either way. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Jost:wght@400;700&display=swap"
+    />
+
+    <link rel="stylesheet" href="styles/main.css" />
+    <link rel="stylesheet" href="styles/playground.css" />
+    <link rel="stylesheet" href="styles/animations.css" />
+  </head>
+  <body>
+    <main>
+      <!-- ============ SCREEN 01 · playground ============ -->
+      <section
+        class="screen screen--playground"
+        id="playground"
+        aria-label="Geometric performance — interactive synthesizer"
+      >
+        <div class="stage" id="stage">
+          <!-- 1. background radial field (Figma: Ellipse 7) -->
+          <div class="stage__bg" aria-hidden="true"></div>
+
+          <!-- 2. typography + static good! (SVG, baseline-exact) -->
+          <svg class="stage__type" id="type-layer" aria-hidden="true"></svg>
+
+          <!-- 3. reactive grid (Canvas) -->
+          <canvas
+            class="stage__grid"
+            id="grid-canvas"
+            aria-hidden="true"
+          ></canvas>
+
+          <!-- 4. family tethers (SVG) -->
+          <svg
+            class="stage__tethers"
+            id="tether-layer"
+            aria-hidden="true"
+          ></svg>
+
+          <!-- 5. instruments (built by scripts/ui.js) -->
+          <div class="stage__bodies" id="bodies"></div>
+
+          <!-- 6. floating controls -->
+          <div class="stage__controls" id="controls">
+            <div
+              class="vslider"
+              id="circle-volume"
+              role="slider"
+              tabindex="-1"
+              aria-label="Circle volume"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              aria-valuenow="70"
+            >
+              <span class="vslider__track"></span>
+              <span class="vslider__fill"></span>
+              <span class="vslider__knob"></span>
+              <span class="vslider__label">vol</span>
+            </div>
+          </div>
+
+          <!-- 7. corner markers = scene controls -->
+          <div class="stage__corners" id="corners"></div>
+
+          <!-- 8. good! popups -->
+          <div class="stage__goods" id="goods" aria-hidden="true"></div>
+
+          <p class="sr-only" id="live" aria-live="polite"></p>
+        </div>
+      </section>
+    </main>
+
+    <!-- classic scripts (work from file:// as well as from a server) -->
+    <script src="scripts/audio.js"></script>
+    <script src="scripts/collisions.js"></script>
+    <script src="scripts/grid.js"></script>
+    <script src="scripts/ui.js"></script>
+    <script src="scripts/interactions.js"></script>
+    <script src="scripts/app.js"></script>
+  </body>
+</html>

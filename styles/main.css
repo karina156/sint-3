@@ -1,0 +1,121 @@
+/* =========================================================
+   main.css — tokens, fonts, page skeleton
+   ========================================================= */
+
+/* Figma font: Evolventa (OFL). Uses a locally installed copy first,
+   then /fonts/*.woff2|ttf if you drop the files there. */
+@font-face {
+  font-family: "Evolventa";
+  src: local("Evolventa"), local("Evolventa-Regular"),
+       url("../fonts/Evolventa-Regular.woff2") format("woff2"),
+       url("../fonts/Evolventa-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Evolventa";
+  src: local("Evolventa Bold"), local("Evolventa-Bold"),
+       url("../fonts/Evolventa-Bold.woff2") format("woff2"),
+       url("../fonts/Evolventa-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  /* colours taken 1:1 from the Figma file */
+  --ink: #2e2e2e;
+  --ink-pure: #000000;
+  --field-center: #2fe959;
+  --field-edge: #befe05;
+
+  --circle-a: #ff1ce5;
+  --circle-b: #ff7604;
+  --square-a: #0fdf00;
+  --square-b: #bbff01;
+  --rect-a: #03cfe2;
+  --rect-b: #0138ff;
+  --oval-a: #c3ff01;
+  --oval-b: #05e372;
+  --capsule-a: #f45217;
+  --capsule-b: #f8dc39;
+
+  --font: "Evolventa", "URW Gothic", "URW Gothic L", "Century Gothic", "Jost", "Avenir Next", system-ui, sans-serif;
+
+  /* motion language */
+  --ease-spring: cubic-bezier(.34, 1.56, .64, 1);
+  --ease-soft: cubic-bezier(.22, .8, .24, 1);
+  --ease-out: cubic-bezier(.16, 1, .3, 1);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--ink);
+  color: var(--ink);
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body { overflow-x: hidden; }
+
+main { display: block; }
+
+.screen {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  height: 100svh;
+  min-height: 480px;
+  overflow: hidden;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  margin: -1px; padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------- placeholder for screen 02 ---------- */
+.screen--next {
+  background: var(--ink);
+  color: var(--field-edge);
+  display: grid;
+  place-items: center;
+  border-top: 1px solid #000;
+}
+.next {
+  width: min(1100px, 100% - 32px);
+  display: grid;
+  gap: 24px;
+}
+.next__index {
+  margin: 0;
+  font-size: clamp(20px, 3vw, 40px);
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  width: 2.2em; height: 2.2em;
+  display: grid; place-items: center;
+}
+.next__title {
+  margin: 0;
+  font-size: clamp(72px, 14vw, 220px);
+  line-height: .9;
+  letter-spacing: -0.01em;
+}
+.next__note {
+  margin: 0;
+  max-width: 46ch;
+  font-size: clamp(14px, 1.3vw, 18px);
+  line-height: 1.45;
+  color: #c9ff7a;
+  opacity: .8;
+}

@@ -1,0 +1,346 @@
+/* =========================================================
+   playground.css — stage layers, instruments, controls
+   Geometry (sizes / positions / matrices) is written inline
+   by scripts/ui.js straight from the Figma data.
+   ========================================================= */
+
+.screen--playground { background: var(--ink); }
+
+.stage {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  touch-action: pan-y;           /* page can still scroll on touch */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* ---------- layer 1 · background field ---------- */
+.stage__bg {
+  position: absolute;
+  inset: 0;
+  background: var(--field-edge);  /* real gradient geometry set from JS */
+}
+
+/* ---------- layer 2 · typography ---------- */
+.stage__type {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+.stage__type text {
+  font-family: var(--font);
+  font-weight: 400;
+  fill: var(--ink);
+  font-kerning: normal;
+}
+.stage__type tspan.b,
+.stage__type text.b { font-weight: 700; }
+
+/* ---------- layer 3 · grid canvas ---------- */
+.stage__grid {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* ---------- layer 4 · tethers ---------- */
+.stage__tethers {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+.tether {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1;
+  stroke-dasharray: 2 7;
+  stroke-linecap: round;
+  opacity: 0;
+  transition: opacity .45s var(--ease-soft);
+}
+.tether.is-on { opacity: .75; }
+
+/* ---------- layer 5 · instruments ---------- */
+.stage__bodies {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.body {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  will-change: transform;
+  touch-action: none;
+  outline: none;
+}
+.body > * { pointer-events: auto; }
+.body.is-dragging { z-index: 50; }
+
+.part {
+  position: absolute;
+  display: block;
+  transform-origin: 50% 50%;
+  cursor: grab;
+}
+.body.is-dragging .part,
+.body.is-dragging .ring { cursor: grabbing; }
+
+.stroke { border: var(--bw, 1px) solid var(--ink); }   /* --bw keeps the Figma 1px stroke at any scale */
+.round  { border-radius: 50%; }
+.pill   { border-radius: 9999px; }
+
+/* fills — linear gradients follow the Figma gradient transforms
+   (0,1,0,-1,0,1 → top-to-bottom in local space; identity → left-to-right) */
+.f-circle  { background: linear-gradient(180deg, var(--circle-a), var(--circle-b)); }
+.f-square  { background: linear-gradient(180deg, var(--square-a), var(--square-b)); }
+.f-rect    { background: linear-gradient(180deg, var(--rect-a), var(--rect-b)); }
+.f-oval    { background: linear-gradient(90deg, var(--oval-a), var(--oval-b)); }
+.f-capsule { background: linear-gradient(180deg, var(--capsule-a), var(--capsule-b)); }
+.f-ink     { background: var(--ink); }
+
+/* arrows (SVG) */
+.arrow {
+  position: absolute;
+  overflow: visible;
+  transform-origin: 0 0;
+  pointer-events: none !important;
+}
+.arrow .stem {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 18;
+  stroke-linecap: square;
+  stroke-linejoin: bevel;
+}
+.arrow .hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 56;
+  stroke-linecap: round;
+  pointer-events: stroke;
+  cursor: ns-resize;
+}
+.body--oval .arrow .hit { cursor: nwse-resize; }
+
+/* "double" ghost: offset copy of the main shape (same language as the capsule) */
+.ghost {
+  opacity: 0;
+  pointer-events: none !important;
+  translate: 0 0;
+  transition: opacity .35s var(--ease-soft), translate .7s var(--ease-spring);
+}
+.body.is-doubled .ghost {
+  opacity: .92;
+  translate: var(--gx, 12px) var(--gy, -12px);
+}
+.stage.doubler-off .body.is-doubled .ghost { opacity: .32; }
+
+/* layer frames around square / rectangle */
+.ring {
+  position: absolute;
+  border: 1px dashed var(--ink);
+  opacity: 0;
+  scale: .94;
+  pointer-events: none !important;
+  cursor: pointer;
+  transition:
+    opacity .3s var(--ease-soft) calc(var(--i, 0) * 45ms),
+    scale .55s var(--ease-spring) calc(var(--i, 0) * 45ms),
+    border-width .2s;
+}
+.body.show-rings .ring {
+  opacity: .7;
+  scale: 1;
+  pointer-events: auto !important;
+}
+.ring.is-active {
+  opacity: 1;
+  scale: 1;
+  border-style: solid;
+  border-width: 2px;
+  pointer-events: auto !important;
+}
+.body.show-rings .ring:hover { opacity: 1; }
+
+/* capsule */
+.capsule-dot {
+  transition: translate .6s var(--ease-spring);
+  translate: 0 0;
+}
+.body--capsule.is-on .capsule-dot { translate: var(--dot-x) var(--dot-y); }
+.capsule-back {
+  transition: translate .6s var(--ease-spring);
+  translate: 0 0;
+}
+.body--capsule.is-spread .capsule-back { translate: var(--spread-x) var(--spread-y); }
+
+/* enlarged invisible hit area for small things (sized from JS) */
+.hitpad {
+  position: absolute;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+}
+
+/* keyboard focus */
+.body:focus-visible .main {
+  outline: 2px dashed var(--ink);
+  outline-offset: 8px;
+}
+
+/* ---------- layer 6 · floating controls ---------- */
+.stage__controls {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.vslider {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 44px;
+  height: 150px;
+  opacity: 0;
+  scale: .9;
+  pointer-events: none;
+  touch-action: none;
+  cursor: ns-resize;
+  transition: opacity .25s var(--ease-soft), scale .45s var(--ease-spring);
+}
+.vslider.is-visible {
+  opacity: 1;
+  scale: 1;
+  pointer-events: auto;
+}
+.vslider__track {
+  position: absolute;
+  left: 50%;
+  top: 10px;
+  bottom: 22px;
+  width: 1px;
+  background: var(--ink);
+}
+.vslider__track::before,
+.vslider__track::after {
+  content: "";
+  position: absolute;
+  left: -6px;
+  width: 13px;
+  height: 1px;
+  background: var(--ink);
+}
+.vslider__track::before { top: 0; }
+.vslider__track::after { bottom: 0; }
+.vslider__fill {
+  position: absolute;
+  left: calc(50% - 2px);
+  bottom: 22px;
+  width: 5px;
+  height: 0;
+  background: var(--ink);
+}
+.vslider__knob {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 20px;
+  height: 20px;
+  margin: -10px 0 0 -10px;
+  border-radius: 50%;
+  background: var(--ink);
+}
+.vslider__label {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  font-size: 12px;
+  line-height: 1;
+  text-align: center;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+/* ---------- layer 7 · corners ---------- */
+.stage__corners {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.corner {
+  position: absolute;
+  padding: 0;
+  margin: 0;
+  border: 1px solid var(--ink-pure);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  pointer-events: auto;
+  font: inherit;
+  transform-origin: 50% 50%;
+  transition: background-color .2s, scale .45s var(--ease-spring);
+}
+.corner::after {               /* min 48px touch target */
+  content: "";
+  position: absolute;
+  inset: -10px;
+  border-radius: 50%;
+}
+.corner svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+.corner text {
+  font-family: var(--font);
+  fill: var(--ink);
+}
+.corner:hover { scale: 1.08; }
+.corner:active { scale: .92; }
+.corner:focus-visible { outline: 2px dashed var(--ink); outline-offset: 4px; }
+
+/* ---------- layer 8 · good! popups ---------- */
+.stage__goods {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.good-pop {
+  position: absolute;
+  left: 0;
+  top: 0;
+  font-family: var(--font);
+  font-weight: 700;
+  line-height: 1;
+  color: var(--ink);
+  white-space: nowrap;
+  pointer-events: none;
+  translate: -50% -50%;
+  rotate: var(--rot, 0deg);
+  will-change: opacity, transform;
+}
+
+@media (pointer: coarse) {
+  .vslider { width: 56px; }
+  .vslider__knob { width: 26px; height: 26px; margin: -13px 0 0 -13px; }
+}
