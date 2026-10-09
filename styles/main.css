@@ -3,12 +3,11 @@
    ========================================================= */
 
 /* Figma font: Evolventa (OFL). Uses a locally installed copy first,
-   then /fonts/*.woff2|ttf if you drop the files there. */
+   then the bundled /fonts/*.woff files. */
 @font-face {
   font-family: "Evolventa";
   src: local("Evolventa"), local("Evolventa-Regular"),
-       url("../fonts/Evolventa-Regular.woff2") format("woff2"),
-       url("../fonts/Evolventa-Regular.ttf") format("truetype");
+       url("../fonts/Evolventa-Regular.woff") format("woff");
   font-weight: 400;
   font-style: normal;
   font-display: swap;
@@ -16,8 +15,7 @@
 @font-face {
   font-family: "Evolventa";
   src: local("Evolventa Bold"), local("Evolventa-Bold"),
-       url("../fonts/Evolventa-Bold.woff2") format("woff2"),
-       url("../fonts/Evolventa-Bold.ttf") format("truetype");
+       url("../fonts/Evolventa-Bold.woff") format("woff");
   font-weight: 700;
   font-style: normal;
   font-display: swap;
