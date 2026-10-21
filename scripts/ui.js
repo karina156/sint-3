@@ -173,6 +173,31 @@
   }
   function arrowLength(a) { return Math.hypot(a.tail[0] - a.head[0], a.tail[1] - a.head[1]); }
 
+  /* Oval: the longest arrow (k = L / L0) whose whole drawing — square caps, head curves and
+     half the 18-unit stroke — still lies inside the oval. Found by bisection on sampled points. */
+  function ovalArrowRange(a, ell) {
+    const L0 = arrowLength(a), ux = (a.tail[0] - a.head[0]) / L0, uy = (a.tail[1] - a.head[1]) / L0;
+    const m = a.m, rx = ell.w / 2 - 9, ry = ell.h / 2 - 9;          // 9 = half the stroke width
+    const bez = (p0, p1, p2, p3, t) => [0, 1].map((i) => (1 - t) ** 3 * p0[i] + 3 * (1 - t) ** 2 * t * p1[i] + 3 * (1 - t) * t * t * p2[i] + t ** 3 * p3[i]);
+    const fits = (k) => {
+      const d = (L0 * k - L0) / 2, sh = (p) => [p[0] - ux * d, p[1] - uy * d];
+      const H = sh(a.head), T = [a.tail[0] + ux * d, a.tail[1] + uy * d];
+      const pts = [[H[0] - ux * 9, H[1] - uy * 9], [T[0] + ux * 9, T[1] + uy * 9]];
+      for (let i = 0; i <= 12; i++) {
+        pts.push(bez(H, sh(a.c1[0]), sh(a.c1[1]), sh(a.c1[2]), i / 12));
+        pts.push(bez(sh(a.c2[0]), sh(a.c2[1]), sh(a.c2[2]), H, i / 12));
+      }
+      return pts.every((p) => {
+        const gx = a.x + m[0] * p[0] + m[2] * p[1], gy = a.y + m[1] * p[0] + m[3] * p[1];
+        const lx = ell.m[0] * gx + ell.m[1] * gy, ly = ell.m[2] * gx + ell.m[3] * gy;   // into the oval's frame
+        return (lx / rx) ** 2 + (ly / ry) ** 2 <= 1;
+      });
+    };
+    let lo = 0.35, hi = 2;
+    for (let i = 0; i < 30; i++) { const mid = (lo + hi) / 2; if (fits(mid)) lo = mid; else hi = mid; }
+    return { min: 0.35, max: lo };
+  }
+
   /* =========================================================
      UI class
      ========================================================= */
@@ -209,7 +234,7 @@
           off: { desktop: [0, 0], mobile: [0, 0] },
           vel: [0, 0], mode: 'rest', anchor: [0, 0],
           pulse: 0, jitter: 0, hover: false,
-          px: { x: 0, y: 0, s: 1 }, last: '', rings: [], arrowOff: 0, arrowLen: 1
+          px: { x: 0, y: 0, s: 1 }, last: '', rings: [], arrowAngle: 0, arrowLen: 1
         };
         b.el.dataset.id = def.id;
         b.el.tabIndex = 0;
@@ -227,7 +252,10 @@
       const ghost = part(b.el, g.main, 'ghost f-circle stroke round');
       ghost.style.setProperty('--gx', '22px'); ghost.style.setProperty('--gy', '-20px');
       b.main = part(b.el, g.main, 'main f-circle stroke round', 'body');
-      this.buildArrow(b, g.arrow);
+      // the arrow's bounding box is centred on the circle (Figma), so it turns around the circle's own axis
+      b.arrowRot = el('div', 'arrow-rot', b.el);
+      this.buildArrow(b, g.arrow, b.arrowRot);
+      b.arrowAngle = 0;
       b.poly = GP.Collisions.ellipsePoly(g.main.w, g.main.h, g.main.m);
     }
     build_oval(b) {
@@ -237,9 +265,10 @@
       b.main = part(b.el, g.main, 'main f-oval stroke round', 'body');
       this.buildArrow(b, g.arrow);
       b.poly = GP.Collisions.ellipsePoly(g.main.w, g.main.h, g.main.m);
+      b.arrowRange = ovalArrowRange(g.arrow, g.main);
     }
-    buildArrow(b, a) {
-      const s = svg('svg', { class: 'arrow', width: r2(a.w), height: r2(a.h), viewBox: `0 0 ${r2(a.w)} ${r2(a.h)}` }, b.el);
+    buildArrow(b, a, parent) {
+      const s = svg('svg', { class: 'arrow', width: r2(a.w), height: r2(a.h), viewBox: `0 0 ${r2(a.w)} ${r2(a.h)}` }, parent || b.el);
       s.style.left = r2(a.x) + 'px';
       s.style.top = r2(a.y) + 'px';
       s.style.transform = `matrix(${a.m[0]},${a.m[1]},${a.m[2]},${a.m[3]},0,0)`;
@@ -251,14 +280,10 @@
       b.arrowGeom = a;
       b.arrowL0 = arrowLength(a);
     }
-    /* circle: slide the whole arrow along its axis */
-    setArrowOffset(b, u) {
-      const a = b.arrowGeom;
-      b.arrowOff = u;
-      b.arrowStem.setAttribute('d', arrowPath(a, u, u));
-      const dx = a.tail[0] - a.head[0], dy = a.tail[1] - a.head[1], L = Math.hypot(dx, dy);
-      const ux = dx / L, uy = dy / L;
-      b.arrowHit.setAttribute('d', `M${r2(a.tail[0] + ux * u)} ${r2(a.tail[1] + uy * u)}L${r2(a.head[0] + ux * u)} ${r2(a.head[1] + uy * u)}`);
+    /* circle: the arrow turns around the circle's centre (degrees, clockwise) */
+    setArrowRotation(b, deg) {
+      b.arrowAngle = deg;
+      b.arrowRot.style.transform = `rotate(${r2(deg)}deg)`;
     }
     /* oval: grow / shrink symmetrically around the arrow midpoint; k = L / L0 */
     setArrowLength(b, k) {

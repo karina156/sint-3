@@ -136,6 +136,24 @@
 }
 .body--oval .arrow .hit { cursor: nwse-resize; }
 
+/* circle arrow turns around the circle's centre (the body origin) */
+.arrow-rot {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+.body--circle .arrow .hit { cursor: grab; }
+.body--circle.is-turning .arrow .hit { cursor: grabbing; }
+
+/* armed: the voice waits for the next beat */
+.body.is-pending .main {
+  animation: pending-blink .22s steps(2, jump-none) infinite alternate;
+}
+
 /* "double" ghost: offset copy of the main shape (same language as the capsule) */
 .ghost {
   opacity: 0;

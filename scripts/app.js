@@ -57,7 +57,7 @@
       this.audio = GP.audio;
       this.state = {
         voices: {
-          circle: { on: false, timbre: 0.5, volume: 0.7, arrowOff: 0, doubled: false },
+          circle: { on: false, timbre: 0.5, volume: 0.7, angle: 0, doubled: false },
           oval: { on: false, length: 1, doubled: false },
           square: { on: false, layers: 1, doubled: false },
           rect: { on: false, layers: 1, doubled: false },
@@ -75,6 +75,8 @@
       this.sliderTimer = 0;
       this.zTop = 10;
       this.hybridLevels = new Map();
+      this.placed = {};                 // last placement sent to the audio engine, per voice
+      this.progRow = -1;
 
       this.ui = new GP.UI(this.stageEl);
       this.grid = new GP.Grid(this.stageEl.querySelector('#grid-canvas'));
@@ -86,7 +88,7 @@
         onTap: (b, part, ring, x, y) => this.tap(b, part, ring, x, y),
         onDragStart: (b) => { this.resume(); b.touched = true; b.el.style.zIndex = ++this.zTop; },
         onDragEnd: () => {},
-        onArrowSlide: (b, u, t) => this.setTimbre(u, t),
+        onArrowRotate: (b, deg) => this.setArrowAngle(deg),
         onArrowLength: (b, k) => this.setOvalLength(k),
         onVolume: (v) => this.setCircleVolume(v),
         onVolumeDelta: (d) => { this.setCircleVolume(this.state.voices.circle.volume + d); this.flashSlider(); },
@@ -161,15 +163,43 @@
       for (const id of VOICE_IDS) a.setVoiceOn(id, v[id].on);
       a.setTimbre(v.circle.timbre);
       a.setVolume('circle', v.circle.volume);
-      a.setVolume('oval', this.ovalVolume());
+      a.setOvalShape(this.ovalAmount());
       a.setLayers('square', v.square.layers);
       a.setLayers('rect', v.rect.layers);
       const dbl = {};
       for (const id of VOICE_IDS) dbl[id] = v[id].doubled;
       a.setDoubles(this.state.doubler.on, dbl);
+      this.placed = {};                 // force every placement to be re-sent
+      this.progRow = -1;
+      this.syncPlacement();
     }
 
-    ovalVolume() { return clamp((this.state.voices.oval.length - 0.35) / 1.1, 0, 1); }
+    /* oval arrow length → 0..1 within the range that keeps it inside the oval */
+    ovalAmount() {
+      const R = this.ui.byId.oval.arrowRange;
+      return clamp((this.state.voices.oval.length - R.min) / (R.max - R.min), 0, 1);
+    }
+
+    /* the poster is the score: x → pan + rhythmic rotation, y → register + depth,
+       the circle's height chooses the progression */
+    syncPlacement() {
+      const a = this.audio, ui = this.ui;
+      if (!a.ready || !ui.vw) return;
+      const { xs, ys } = ui.gridLines();
+      for (const id of VOICE_IDS) {
+        const b = ui.byId[id];
+        const x01 = clamp(b.px.x / ui.vw, 0, 1), y01 = clamp(b.px.y / ui.vh, 0, 1);
+        const col = xs.filter((x) => x < b.px.x).length, row = ys.filter((y) => y < b.px.y).length;
+        const last = this.placed[id];
+        if (last && last.col === col && last.row === row && Math.abs(last.x01 - x01) < 0.004 && Math.abs(last.y01 - y01) < 0.004) continue;
+        const p = { x01, y01, col, row };
+        this.placed[id] = p;
+        a.setPlacement(id, p);
+      }
+      const cy = this.placed.circle ? this.placed.circle.y01 : 0.5;
+      const prog = cy < 0.36 ? 0 : cy > 0.62 ? 2 : 1;
+      if (prog !== this.progRow) { this.progRow = prog; a.setProgression(prog); }
+    }
     anyArmed() { return VOICE_IDS.some((id) => this.state.voices[id].on); }
 
     /* ---------------- instrument logic ---------------- */
@@ -177,7 +207,7 @@
       const st = this.state, v = st.voices;
       const wasPaused = !st.scene.playing;
       const armedBefore = this.anyArmed();
-      this.resume();
+      const before = this.voiceSnapshot();
       let msg = '';
 
       if (b.kind === 'capsule') {
@@ -203,11 +233,36 @@
         msg = `${NAMES[b.id]} ${voice.on ? 'on' : 'off'}` + (voice.layers !== undefined && voice.on ? `, ${voice.layers} layer${voice.layers > 1 ? 's' : ''}` : '');
       }
 
+      // state first, then the scene: a voice switched on from silence lands on the very first downbeat
+      this.resume();
       if (part !== 'ring') b.pulse = Math.max(b.pulse, 0.05);   // frames must stay put under the finger
       this.ui.spawnGood(x, y);
       this.ui.announce(msg);
       this.syncAudio();
+      this.markPending(before);
+      if (armedBefore && !this.anyArmed() && !wasPaused) this.audio.resolve();   // the last voice left: resolve
       this.refresh();
+    }
+
+    voiceSnapshot() {
+      const o = {};
+      for (const id of VOICE_IDS) o[id] = this.state.voices[id].on;
+      return o;
+    }
+    /* a voice switched on/off waits for the next beat: blink until it lands */
+    markPending(before) {
+      if (!this.audio.ready) return;
+      const now = this.audio.ctx.currentTime;
+      for (const id of VOICE_IDS) {
+        if (before[id] === this.state.voices[id].on) continue;
+        const v = this.audio.voices[id], b = this.ui.byId[id];
+        const at = this.state.voices[id].on ? v.onAt : v.offAt;
+        const ms = Math.max(0, (at - now) * 1000);
+        if (ms < 30) continue;
+        b.el.classList.add('is-pending');
+        clearTimeout(b.pendingTimer);
+        b.pendingTimer = setTimeout(() => b.el.classList.remove('is-pending'), ms);
+      }
     }
 
     setLayers(id, k) {
@@ -217,16 +272,21 @@
       else v.layers = k;
     }
 
-    setTimbre(u, t) {
+    /* circle arrow turns like a dial: up (as in Figma) = middle timbre,
+       clockwise → brighter, counter-clockwise → darker, all the way round */
+    setArrowAngle(deg) {
       const c = this.state.voices.circle;
-      c.arrowOff = u; c.timbre = t;
-      this.ui.setArrowOffset(this.ui.byId.circle, u);
-      if (this.audio.ready) this.audio.setTimbre(t);
+      c.angle = deg;
+      c.timbre = 0.5 + 0.5 * Math.sin((deg * Math.PI) / 180);
+      this.ui.setArrowRotation(this.ui.byId.circle, deg);
+      if (this.audio.ready) this.audio.setTimbre(c.timbre);
     }
     setOvalLength(k) {
+      const R = this.ui.byId.oval.arrowRange;
+      k = clamp(k, R.min, R.max);
       this.state.voices.oval.length = k;
       this.ui.setArrowLength(this.ui.byId.oval, k);
-      if (this.audio.ready) this.audio.setVolume('oval', this.ovalVolume());
+      if (this.audio.ready) this.audio.setOvalShape(this.ovalAmount());
     }
     setCircleVolume(vol) {
       const c = this.state.voices.circle;
@@ -288,12 +348,15 @@
               this.pause(450);
               this.ui.announce('scene paused');
               break;
-            case 'kill':
+            case 'kill': {
+              const had = this.anyArmed();
               for (const id of VOICE_IDS) { st.voices[id].on = false; st.voices[id].doubled = false; }
               st.doubler.on = false;
               this.syncAudio();
+              if (had && st.scene.playing) this.audio.resolve();
               this.ui.announce('all voices off');
               break;
+            }
             case 'zero':
               this.ix.returnHome();
               for (const b of this.ui.bodies) b.touched = false;
@@ -325,12 +388,10 @@
             this.flashSlider();
           } else if (b.kind === 'circle' && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
             e.preventDefault();
-            const R = GP.ARROW_RANGE;
-            const u = clamp(st.voices.circle.arrowOff + (e.key === 'ArrowLeft' ? 5 : -5), -R, R);
-            this.setTimbre(u, (R - u) / (2 * R));
+            this.setArrowAngle(st.voices.circle.angle + (e.key === 'ArrowRight' ? 10 : -10));
           } else if (b.kind === 'oval' && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
             e.preventDefault();
-            this.setOvalLength(clamp(st.voices.oval.length + (e.key === 'ArrowUp' ? 0.05 : -0.05), 0.35, 1.45));
+            this.setOvalLength(st.voices.oval.length + (e.key === 'ArrowUp' ? 0.04 : -0.04));
           } else if (e.key === 'Escape') {
             st.selected = null; this.refresh();
           }
@@ -362,13 +423,17 @@
         ui.renderBody(b, this.time);
         this.world.update(b.id, b.px.x, b.px.y, b.px.s);
       }
+      if (st.scene.playing) this.syncPlacement();
 
       // overlap → hybrid voices (fade in from first contact, full at ~35 %)
       const pairs = this.world.compute();
       const jit = {};
       pairs.forEach((p, key) => {
         // the poster's own overlaps (e.g. circle × square in Figma) stay neutral until the user moves one of the pair
-        const awake = ui.byId[p.a].touched || ui.byId[p.b].touched;
+        // …and only while one of the pair is sounding (the capsule sounds while the doubler is on),
+        // so that switching everything off lets the piece end in silence
+        const sounding = (id) => (id === 'capsule' ? st.doubler.on : !!(st.voices[id] && st.voices[id].on));
+        const awake = (ui.byId[p.a].touched || ui.byId[p.b].touched) && (sounding(p.a) || sounding(p.b));
         const target = awake ? smoothstep(0, 0.35, p.ratio) : 0;
         const prev = this.hybridLevels.get(key) || 0;
         const lvl = prev + (target - prev) * Math.min(1, dt * 6);
@@ -399,6 +464,10 @@
     }
 
     onVisual(ev) {
+      if (ev.id === 'resolve') {                    // the closing chord: everything breathes once
+        for (const x of this.ui.bodies) x.pulse = Math.max(x.pulse, 0.035);
+        return;
+      }
       const b = this.ui.byId[ev.id];
       if (!b) return;
       if (ev.id === 'square' || ev.id === 'rect') {

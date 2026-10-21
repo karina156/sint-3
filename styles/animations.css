@@ -66,6 +66,12 @@
   animation: soft-breathe 2.8s ease-in-out infinite reverse;
 }
 
+/* a voice that has been switched waits for the next beat — a short blink in tempo */
+@keyframes pending-blink {
+  from { filter: none; }
+  to   { filter: brightness(1.12) saturate(1.15); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .good-pop, .good-pop.is-out { animation-duration: .01s; }
   .corner.is-calling,

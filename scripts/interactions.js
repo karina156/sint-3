@@ -4,7 +4,8 @@
    · drag = critically-under-damped spring to the finger (slight lag)
    · release = inertia with friction, soft bounce at the frame edge
    · intro nudge = impulse + spring back (overshoot)
-   · arrow gestures: circle slide (timbre), oval length (volume)
+   · arrow gestures: circle arrow turns around the centre (timbre),
+     oval arrow length (phrase + volume), never leaving the oval
    · vertical volume slider for the circle, wheel on the circle
    ========================================================= */
 (function () {
@@ -16,7 +17,6 @@
   const BACK_K = 120, BACK_C = 9.5;        // intro / return spring (underdamped → overshoot)
   const HOME_K = 70, HOME_C = 12;          // "z" reset spring
   const FRICTION = 3.4;                    // inertia decay (1/s)
-  const ARROW_RANGE = 55;                  // circle arrow travel (design units)
 
   class Interactions {
     constructor(ui, handlers) {
@@ -110,11 +110,16 @@
         g.moved = true;
         g.partEl.classList.remove('is-pressed');
         const b = g.b;
-        if (g.part === 'arrow' && b.kind === 'circle') g.kind = 'arrow';
-        else if (g.part === 'arrow' && b.kind === 'oval') {
+        if (g.part === 'arrow' && b.kind === 'circle') {
+          g.kind = 'rotate';
+          g.lastAng = Math.atan2(g.y0 - b.px.y, g.x0 - b.px.x);
+          b.el.classList.add('is-turning');
+        } else if (g.part === 'arrow' && b.kind === 'oval') {
           g.kind = 'length';
           g.startK = b.arrowLen;
-          g.startProj = Math.abs(this._ovalProj(b, g.x0, g.y0));
+          const p0 = this._ovalProj(b, g.x0, g.y0);
+          g.side = p0 < 0 ? -1 : 1;                 // which end was grabbed
+          g.startProj = Math.abs(p0);
         } else {
           g.kind = 'drag';
           const p = b.px;
@@ -129,16 +134,23 @@
       if (g.kind === 'drag') {
         const L = ui.layout, home = L.bodies[b.id].home;
         b.dragTarget = [(x - g.grab[0]) / ui.kx - home[0], (y - g.grab[1]) / ui.ky - home[1]];
-      } else if (g.kind === 'arrow') {
-        const a = b.arrowGeom, m = a.m;
-        const lx = a.tail[0] - a.head[0], ly = a.tail[1] - a.head[1], L = Math.hypot(lx, ly);
-        const ax = (m[0] * lx + m[2] * ly) / L, ay = (m[1] * lx + m[3] * ly) / L;     // axis in body space
-        const du = (dx * ax + dy * ay) / b.px.s;
-        const u = clamp(b.arrowOff + du, -ARROW_RANGE, ARROW_RANGE);
-        this.h.onArrowSlide(b, u, (ARROW_RANGE - u) / (2 * ARROW_RANGE));
+      } else if (g.kind === 'rotate') {
+        // turn around the circle's centre; ignore the unstable zone right at the centre
+        if (Math.hypot(x - b.px.x, y - b.px.y) < 14) return;
+        const ang = Math.atan2(y - b.px.y, x - b.px.x);
+        let d = ang - g.lastAng;
+        if (d > Math.PI) d -= 2 * Math.PI;
+        if (d < -Math.PI) d += 2 * Math.PI;
+        g.lastAng = ang;
+        this.h.onArrowRotate(b, b.arrowAngle + (d * 180) / Math.PI);
       } else if (g.kind === 'length') {
-        const proj = Math.abs(this._ovalProj(b, x, y));
-        const k = clamp(g.startK + (2 * (proj - g.startProj)) / b.arrowL0, 0.35, 1.45);
+        const R = b.arrowRange;
+        const proj = g.side * this._ovalProj(b, x, y);   // signed: crossing the middle keeps shrinking
+        const want = g.startK + (2 * (proj - g.startProj)) / b.arrowL0;
+        const k = clamp(want, R.min, R.max);
+        // the arrow cannot leave the oval: a small bump tells the hand it hit the edge
+        if (want > R.max + 0.01 && !g.atEdge) { g.atEdge = true; b.pulse = Math.max(b.pulse, 0.035); }
+        if (want < R.max) g.atEdge = false;
         this.h.onArrowLength(b, k);
       }
     }
@@ -159,6 +171,7 @@
         if (e.type === 'pointerup') this.h.onTap(b, g.part, g.ring, x, y);
         return;
       }
+      if (g.kind === 'rotate') b.el.classList.remove('is-turning');
       if (g.kind === 'drag') {
         // release velocity from the last ~100 ms of samples
         const s = g.samples, a = s[0], z = s[s.length - 1];
@@ -268,5 +281,4 @@
   }
 
   GP.Interactions = Interactions;
-  GP.ARROW_RANGE = ARROW_RANGE;
 })();
