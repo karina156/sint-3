@@ -188,6 +188,33 @@
       this.lfo = ctx.createOscillator(); this.lfo.frequency.value = 0.08;
       this.lfoAmt = ctx.createGain(); this.lfoAmt.gain.value = 120;
       this.lfo.connect(this.lfoAmt).connect(this.filter.frequency); this.lfo.start();
+      // her voice: a soft choir — a buzz through two vowel formants ("oo" → "ah" with the arrow)
+      this.voiceSrc = ctx.createOscillator(); this.voiceSrc.type = 'sawtooth';
+      this.voiceSrc2 = ctx.createOscillator(); this.voiceSrc2.type = 'sawtooth'; this.voiceSrc2.detune.value = 9;
+      const vib = ctx.createOscillator(); vib.frequency.value = 4.6;
+      this.vibAmt = ctx.createGain(); this.vibAmt.gain.value = 5;
+      vib.connect(this.vibAmt); this.vibAmt.connect(this.voiceSrc.detune); this.vibAmt.connect(this.voiceSrc2.detune); vib.start();
+      this.voiceMix = ctx.createGain(); this.voiceMix.gain.value = 0.5;
+      this.voiceSrc.connect(this.voiceMix); this.voiceSrc2.connect(this.voiceMix);
+      const fm = (q, g) => {
+        const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = q;
+        const gg = ctx.createGain(); gg.gain.value = g;
+        this.voiceMix.connect(f).connect(gg).connect(this.choir);
+        return f;
+      };
+      this.choir = ctx.createGain(); this.choir.gain.value = 0;
+      this.F1 = fm(7, 1.0); this.F2 = fm(9, 0.55); this.F3 = fm(11, 0.18);
+      const choirLp = ctx.createBiquadFilter(); choirLp.type = 'lowpass'; choirLp.frequency.value = 3000;
+      this.choir.connect(choirLp).connect(this.duckG);
+      this.voiceSrc.start(); this.voiceSrc2.start();
+      // breath: airy noise in the same vowel, swelling slowly
+      this.breath = ctx.createBufferSource(); this.breath.buffer = engine.noise; this.breath.loop = true;
+      this.breathF = ctx.createBiquadFilter(); this.breathF.type = 'bandpass'; this.breathF.Q.value = 1.6;
+      this.breathG = ctx.createGain(); this.breathG.gain.value = 0.012;
+      const bl = ctx.createOscillator(); bl.frequency.value = 0.13;
+      const bla = ctx.createGain(); bla.gain.value = 0.008;
+      bl.connect(bla).connect(this.breathG.gain); bl.start();
+      this.breath.connect(this.breathF).connect(this.breathG).connect(this.duckG); this.breath.start();
       this.timbre = 0.5;
       this.chord(engine.clocks.she.chord, ctx.currentTime);
       this.setTimbre(0.5);
@@ -200,6 +227,8 @@
       glide(this.ninth.o.frequency, r * ratio(c.ninth), ctx, tau, t);
       glide(this.bright.o.frequency, r, ctx, tau, t);
       glide(this.sub.o.frequency, r / 2, ctx, tau, t);
+      glide(this.voiceSrc.frequency, r * ratio(c.fifth), ctx, tau, t);
+      glide(this.voiceSrc2.frequency, r * 2 * ratio(c.third), ctx, tau, t);
     }
     setTimbre(t) {
       this.timbre = t = clamp(t, 0, 1);
@@ -211,6 +240,13 @@
       glide(this.third.g.gain, 0.1 + 0.12 * t, ctx, 0.06);
       glide(this.bright.g.gain, 0.09 * t * t, ctx, 0.06);
       glide(this.lfoAmt.gain, 40 + 120 * t, ctx, 0.2);
+      // vowel: oo (300/870/2240) → oh (500/900/2400) → ah (730/1090/2440)
+      const mix = (a, b) => a + (b - a) * t;
+      glide(this.F1.frequency, mix(300, 730), ctx, 0.12);
+      glide(this.F2.frequency, mix(870, 1090), ctx, 0.12);
+      glide(this.F3.frequency, mix(2240, 2440), ctx, 0.12);
+      glide(this.breathF.frequency, mix(900, 1500), ctx, 0.12);
+      glide(this.choir.gain, 0.08 + 0.07 * t, ctx, 0.1);
       if (this.engine.voices.oval) this.engine.voices.oval.follow(t);
     }
     setEnergy(e) { glide(this.ninth.g.gain, 0.03 + 0.14 * e, this.engine.ctx, 1.5); }
@@ -257,15 +293,21 @@
       else if (form === 3) m = MOTIF[(this.len - 1 - e8) % MOTIF.length];
       const f = c.note(m, 3 + octOf(this.place.y01));
       const ctx = this.engine.ctx;
-      const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = f;
-      const o2 = ctx.createOscillator(); o2.type = 'sine'; o2.frequency.value = f * 3;
-      const g = ctx.createGain(), g2 = ctx.createGain(); g2.gain.value = 0.08;
-      o.connect(g); o2.connect(g2).connect(g); g.connect(this.filter);
+      // a bell: FM with an inharmonic modulator whose shimmer fades into a pure tone
       const accent = e8 === 0 ? 1 : 0.72;
+      const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = f;
+      const mod = ctx.createOscillator(); mod.type = 'sine'; mod.frequency.value = f * 3.5;
+      const mg = ctx.createGain();
+      mg.gain.setValueAtTime(f * 1.6 * accent, t);
+      mg.gain.setTargetAtTime(f * 0.08, t + 0.01, 0.18);
+      mod.connect(mg).connect(o.frequency);
+      const o2 = ctx.createOscillator(); o2.type = 'sine'; o2.frequency.value = f * 2.005;
+      const g = ctx.createGain(), g2 = ctx.createGain(); g2.gain.value = 0.12;
+      o.connect(g); o2.connect(g2).connect(g); g.connect(this.filter);
       g.gain.setValueAtTime(0, t);
-      g.gain.linearRampToValueAtTime(0.19 * accent, t + 0.03);
-      g.gain.setTargetAtTime(0, t + 0.05, 0.32);
-      o.start(t); o2.start(t); o.stop(t + 2); o2.stop(t + 2);
+      g.gain.linearRampToValueAtTime(0.17 * accent, t + 0.006);
+      g.gain.setTargetAtTime(0, t + 0.02, 0.45);
+      o.start(t); o2.start(t); mod.start(t); o.stop(t + 2.6); o2.stop(t + 2.6); mod.stop(t + 2.6);
       this.engine.visual(t, 'oval', 0, accent);
     }
   }
@@ -302,22 +344,33 @@
     hit(t, vel, root, layer) {
       const ctx = this.engine.ctx;
       const f = layer === 3 ? root * 4 : root * 2;
-      // a soft wooden pulse: a sine body with a gentle pitch drop and a quiet overtone (marimba-like)
-      const o = ctx.createOscillator(); o.type = layer === 1 ? 'sine' : 'triangle';
-      o.frequency.setValueAtTime(f * (layer === 1 ? 1.6 : 1.12), t);
-      o.frequency.exponentialRampToValueAtTime(f, t + 0.05);
-      const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.Q.value = 0.6;
-      lp.frequency.setValueAtTime(layer === 3 ? 2600 : 1900, t);
-      lp.frequency.exponentialRampToValueAtTime(500, t + 0.25);
-      const g = ctx.createGain();
-      env(g, t, (layer === 1 ? 0.62 : 0.34) * vel, 0.006, layer === 3 ? 0.14 : layer === 1 ? 0.32 : 0.22);
-      o.connect(lp).connect(g).connect(this.gate);
-      o.start(t); o.stop(t + 0.5);
-      const ov = ctx.createOscillator(); ov.type = 'sine'; ov.frequency.value = f * 4;
-      const og = ctx.createGain();
-      env(og, t, 0.05 * vel, 0.004, 0.06);
-      ov.connect(og).connect(this.gate);
-      ov.start(t); ov.stop(t + 0.15);
+      // his voice: a wooden bar. Layer 1 is the low log drum (a thump with a dropping pitch),
+      // layers 2–3 are marimba bars (fundamental + the bar's 3.93 and 9.2 partials) and a mallet knock
+      const g = ctx.createGain(); g.connect(this.gate);
+      if (layer === 1) {
+        const o = ctx.createOscillator(); o.type = 'sine';
+        o.frequency.setValueAtTime(f * 1.5, t);
+        o.frequency.exponentialRampToValueAtTime(f * 0.98, t + 0.07);
+        env(g, t, 0.58 * vel, 0.004, 0.36);
+        o.connect(g); o.start(t); o.stop(t + 0.55);
+        const p = ctx.createOscillator(); p.type = 'sine'; p.frequency.value = f * 2.76;
+        const pg = ctx.createGain(); env(pg, t, 0.12 * vel, 0.003, 0.08);
+        p.connect(pg).connect(this.gate); p.start(t); p.stop(t + 0.2);
+      } else {
+        const ff = layer === 3 ? f : f * 1.5;
+        [[1, 0.36, layer === 3 ? 0.2 : 0.3], [3.93, 0.09, 0.07], [9.2, 0.03, 0.025]].forEach(([m, a, d]) => {
+          const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = ff * m;
+          const pg = ctx.createGain(); env(pg, t, a * vel, 0.003, d);
+          o.connect(pg).connect(g); o.start(t); o.stop(t + d * 5 + 0.05);
+        });
+        g.gain.value = 1;
+      }
+      // mallet: a short, woody knock (band-limited noise, low-mid, not a hiss)
+      const n = ctx.createBufferSource(); n.buffer = this.engine.noise;
+      const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = layer === 1 ? 700 : 1300; bp.Q.value = 2.5;
+      const ng = ctx.createGain(); env(ng, t, 0.07 * vel, 0.001, 0.016);
+      n.connect(bp).connect(ng).connect(this.gate);
+      n.start(t, Math.random() * 0.5); n.stop(t + 0.04);
     }
   }
 
@@ -331,7 +384,7 @@
       this.k = 0;
       this.crush = ctx.createGain();   // was a bitcrusher; now a clean input
       this.bp = ctx.createBiquadFilter(); this.bp.type = 'lowpass';
-      this.bp.frequency.value = 2400; this.bp.Q.value = 0.5;
+      this.bp.frequency.value = 3600; this.bp.Q.value = 0.5;
       this.crush.connect(this.bp).connect(this.gate);
       this.vol.gain.value = 0.7;
     }
@@ -346,21 +399,24 @@
       const f = c.root * 4 * Math.pow(2, octOf(this.place.y01)) * (this.layers === 3 ? jumps[i % jumps.length] : 1);
       const ratchet = this.layers === 3 && i === 0 ? 3 : this.layers >= 2 && i === n - 1 ? 2 : 1;
       const step = this.engine.clockOf(this).stepDur;
-      for (let r = 0; r < ratchet; r++) this.blip(t + (r * step) / ratchet, f * (r ? 1.5 : 1), r ? 0.55 : 0.9);
+      for (let r = 0; r < ratchet; r++) this.blip(t + (r * step) / ratchet, f * (r ? 2 : 1), r ? 0.55 : 0.9);
       this.engine.visual(t, 'rect', ratchet > 1 ? 3 : this.layers === 1 ? 1 : 2, 0.8);
     }
     blip(t, f, vel) {
       const ctx = this.engine.ctx;
-      // a small glass pluck: triangle + a bell partial
-      const o = ctx.createOscillator(); o.type = 'triangle';
-      o.frequency.setValueAtTime(f, t);
-      const o2 = ctx.createOscillator(); o2.type = 'sine';
-      o2.frequency.setValueAtTime(f * 2.01, t);
-      const g = ctx.createGain(), g2 = ctx.createGain();
-      env(g, t, 0.2 * vel, 0.004, 0.12);
-      env(g2, t, 0.06 * vel, 0.003, 0.08);
-      o.connect(g).connect(this.crush); o2.connect(g2).connect(this.crush);
-      o.start(t); o.stop(t + 0.25); o2.start(t); o2.stop(t + 0.2);
+      // a plucked string (koto-like): two slightly detuned saws, the filter closes after the pluck
+      const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.Q.value = 2.2;
+      lp.frequency.setValueAtTime(Math.min(9000, f * 7), t);
+      lp.frequency.exponentialRampToValueAtTime(Math.max(200, f * 1.1), t + 0.16);
+      const g = ctx.createGain();
+      env(g, t, 0.13 * vel, 0.002, 0.2);
+      for (const dt of [-7, 6]) {
+        const o = ctx.createOscillator(); o.type = 'sawtooth'; o.detune.value = dt;
+        o.frequency.setValueAtTime(f * 1.012, t);
+        o.frequency.exponentialRampToValueAtTime(f, t + 0.03);           // the string settles after the pluck
+        o.connect(lp); o.start(t); o.stop(t + 0.42);
+      }
+      lp.connect(g).connect(this.crush);
     }
   }
 
@@ -385,26 +441,46 @@
       if (idx < 0) return;
       const ctx = this.engine.ctx, k = this.kind;
       const f = c.note(this.cell.degs[idx], 3 + octOf(this.place.y01));
-      if (k === 'click') {
+      const out = ctx.createGain(); out.connect(this.gate);
+      if (k === 'click') {                                   // a soft wooden tick
         const n = ctx.createBufferSource(); n.buffer = this.engine.noise;
-        const hp = ctx.createBiquadFilter(); hp.type = 'bandpass'; hp.frequency.value = 4200; hp.Q.value = 0.8;
-        const g = ctx.createGain(); env(g, t, 0.09, 0.002, 0.018);
-        n.connect(hp).connect(g).connect(this.gate);
-        n.start(t, Math.random()); n.stop(t + 0.02);
-      } else {
-        const o = ctx.createOscillator(), g = ctx.createGain();
-        if (k === 'blip') { o.type = 'sine'; o.frequency.setValueAtTime(f, t); env(g, t, 0.22, 0.005, 0.16); o.connect(g).connect(this.gate); }
-        else if (k === 'beep') {
-          o.type = 'triangle'; o.frequency.setValueAtTime(f, t);
-          const bp = ctx.createBiquadFilter(); bp.type = 'lowpass'; bp.frequency.value = f * 3; bp.Q.value = 0.5;
-          env(g, t, 0.2, 0.006, 0.14); o.connect(bp).connect(g).connect(this.gate);
-        } else {
-          o.type = 'sine';
-          o.frequency.setValueAtTime(f * 0.94, t);
-          o.frequency.exponentialRampToValueAtTime(f, t + 0.06);
-          env(g, t, 0.18, 0.006, 0.14); o.connect(g).connect(this.gate);
-        }
-        o.start(t); o.stop(t + 0.3);
+        const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 2100; bp.Q.value = 6;
+        env(out, t, 0.16, 0.001, 0.02);
+        n.connect(bp).connect(out); n.start(t, Math.random()); n.stop(t + 0.05);
+      } else if (k === 'blip') {                             // a water drop: a fast upward bend
+        const o = ctx.createOscillator(); o.type = 'sine';
+        o.frequency.setValueAtTime(f * 0.55, t);
+        o.frequency.exponentialRampToValueAtTime(f * 1.5, t + 0.045);
+        env(out, t, 0.24, 0.003, 0.07);
+        o.connect(out); o.start(t); o.stop(t + 0.2);
+      } else if (k === 'beep') {                             // an ocarina: round tone, breath and vibrato
+        const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = f;
+        const vib = ctx.createOscillator(); vib.frequency.value = 5.5;
+        const va = ctx.createGain(); va.gain.setValueAtTime(0, t); va.gain.linearRampToValueAtTime(f * 0.012, t + 0.12);
+        vib.connect(va).connect(o.frequency);
+        const h = ctx.createOscillator(); h.type = 'sine'; h.frequency.value = f * 2;
+        const hg = ctx.createGain(); hg.gain.value = 0.12; h.connect(hg).connect(out);
+        const n = ctx.createBufferSource(); n.buffer = this.engine.noise;
+        const nb = ctx.createBiquadFilter(); nb.type = 'bandpass'; nb.frequency.value = f * 2; nb.Q.value = 3;
+        const ng = ctx.createGain(); ng.gain.value = 0.25; n.connect(nb).connect(ng).connect(out);
+        out.gain.setValueAtTime(0, t);
+        out.gain.linearRampToValueAtTime(0.2, t + 0.04);
+        out.gain.setTargetAtTime(0, t + 0.16, 0.08);
+        o.connect(out);
+        [o, vib, h].forEach((x) => { x.start(t); x.stop(t + 0.6); });
+        n.start(t, Math.random()); n.stop(t + 0.6);
+      } else {                                               // a bird: two quick rising chirps
+        const o = ctx.createOscillator(); o.type = 'sine';
+        o.frequency.setValueAtTime(f * 1.6, t);
+        o.frequency.exponentialRampToValueAtTime(f * 3, t + 0.04);
+        o.frequency.setValueAtTime(f * 1.9, t + 0.06);
+        o.frequency.exponentialRampToValueAtTime(f * 3.4, t + 0.1);
+        out.gain.setValueAtTime(0, t);
+        out.gain.linearRampToValueAtTime(0.1, t + 0.008);
+        out.gain.linearRampToValueAtTime(0.01, t + 0.045);
+        out.gain.linearRampToValueAtTime(0.09, t + 0.065);
+        out.gain.setTargetAtTime(0, t + 0.09, 0.02);
+        o.connect(out); o.start(t); o.stop(t + 0.25);
       }
       this.engine.visual(t, this.id, 0, 0.8);
     }
