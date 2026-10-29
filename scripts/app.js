@@ -107,6 +107,7 @@
         }
       });
 
+      this.story = new GP.Story(this);
       this.audio.onReady = () => this.syncAudio();
       this.bindCorners();
       this.bindKeys();
@@ -170,7 +171,6 @@
       for (const id of VOICE_IDS) dbl[id] = v[id].doubled;
       a.setDoubles(this.state.doubler.on, dbl);
       this.placed = {};                 // force every placement to be re-sent
-      this.progRow = -1;
       this.syncPlacement();
     }
 
@@ -196,14 +196,12 @@
         this.placed[id] = p;
         a.setPlacement(id, p);
       }
-      const cy = this.placed.circle ? this.placed.circle.y01 : 0.5;
-      const prog = cy < 0.36 ? 0 : cy > 0.62 ? 2 : 1;
-      if (prog !== this.progRow) { this.progRow = prog; a.setProgression(prog); }
     }
     anyArmed() { return VOICE_IDS.some((id) => this.state.voices[id].on); }
 
     /* ---------------- instrument logic ---------------- */
     tap(b, part, ring, x, y) {
+      this.story.beforeTap(b);
       const st = this.state, v = st.voices;
       const wasPaused = !st.scene.playing;
       const armedBefore = this.anyArmed();
@@ -240,6 +238,7 @@
       this.ui.announce(msg);
       this.syncAudio();
       this.markPending(before);
+      this.story.afterTap(b);
       if (armedBefore && !this.anyArmed() && !wasPaused) this.audio.resolve();   // the last voice left: resolve
       this.refresh();
     }
@@ -339,7 +338,7 @@
           switch (c.def.id) {
             case 'play':
               this.unlock();
-              if (!this.anyArmed()) { st.voices.circle.on = true; }
+              if (!this.anyArmed()) { st.voices[GP.STORY_ROLES.HE].on = true; this.story.afterTap(this.ui.byId[GP.STORY_ROLES.HE]); }
               this.resume();
               this.syncAudio();
               this.ui.announce('scene playing');
@@ -349,6 +348,7 @@
               this.ui.announce('scene paused');
               break;
             case 'kill': {
+              if (this.story.scene === 'light') { this.story.finale(); this.ui.announce('finale'); break; }
               const had = this.anyArmed();
               for (const id of VOICE_IDS) { st.voices[id].on = false; st.voices[id].doubled = false; }
               st.doubler.on = false;
@@ -358,7 +358,7 @@
               break;
             }
             case 'zero':
-              this.ix.returnHome();
+              this.story.restart(true);
               for (const b of this.ui.bodies) b.touched = false;
               this.ui.announce('shapes return home');
               break;
@@ -448,6 +448,9 @@
         b.jitter += (target - b.jitter) * Math.min(1, dt * 8);
       }
 
+      // the story moves on when the two meet, merge, and give birth
+      this.story.update(dt, pairs);
+
       // audio-scheduled visual events
       this.audio.drainVisual((ev) => this.onVisual(ev));
 
@@ -464,6 +467,7 @@
     }
 
     onVisual(ev) {
+      this.story.onVisual(ev);
       if (ev.id === 'resolve') {                    // the closing chord: everything breathes once
         for (const x of this.ui.bodies) x.pulse = Math.max(x.pulse, 0.035);
         return;

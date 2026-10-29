@@ -1,45 +1,70 @@
 /* =========================================================
-   audio.js — Web Audio engine: "order and breath"
-   The square family is metre (Euclidean rhythms, polymeter),
-   the circle family is breath (just-intonation pad, a motif that develops).
-   Shapes touching = friction, merging = consonance.
+   audio.js — Web Audio engine for the story
+   «все формы происходят от двух»
 
-   · harmony: D Dorian field; the circle's height on the poster picks one
-     of three progressions (bright / home / dark), chords change every 2 bars
-   · position on the poster = the score: x → pan + rhythmic rotation,
-     y → register + depth (reverb)
-   · every voice enters and leaves on the next beat (quantized)
-   · shared space: convolution reverb + tempo ping-pong delay,
-     the square ducks the pad (sidechain), soft saturation on the master
-   · energy builds while voices play together and opens the mix
-   · when the last voice stops, the piece resolves on a tonic chord
-   All gain moves are ramped → no clicks.
+   Two worlds play at first, each on its own clock:
+     he  (square) — E♭ Lydian, 123 BPM — «он одинок»
+     she (circle) — B whole-tone, 133 BPM — «она потеряна»
+   When they start to look for each other the worlds unite on one clock
+   and travel through the scenes:
+     search — G harmonic minor, 85 — «поиск той»
+     meet   — B whole-tone, 85, a call and an answer — «где ты» / «я тут, привет»
+     light  — D major, 95 — «свет ваш»: children are born
+     final  — D major, a last cadence — «снова двое»
+   (worlds = the author's saved choices in the harmony lab)
+
+   Shared for all scenes: Euclidean rhythms, a motif that develops, interlocking
+   cells, just intonation where the interval is pure, reverb + ping-pong delay,
+   sidechain from the square, soft saturation, quantized entries, hybrids
+   that glide from friction (16:15) to a fifth (3:2).
    ========================================================= */
 (function () {
   'use strict';
   const GP = (window.GP = window.GP || {});
 
-  const BPM = 108;
-  const STEP = 60 / BPM / 4;              // 16th note
   const LOOKAHEAD = 0.12;
   const TICK_MS = 25;
+  const C2 = 65.406;
 
-  /* ---------- harmony: D Dorian ---------- */
-  const D2 = 73.416;
-  const MODE = [0, 2, 3, 5, 7, 9, 10];
-  const deg = (d) => { const o = Math.floor(d / 7), i = ((d % 7) + 7) % 7; return MODE[i] + 12 * o; };
-  const hz = (semis) => D2 * Math.pow(2, semis / 12);
-  const PROGS = [
-    [3, 6, 2, 0],    // bright: G – C – F – Dm
-    [0, 3, 0, 6],    // home:   Dm – G – Dm – C
-    [0, 4, 2, 6]     // dark:   Dm – Am – F – C
-  ];
-  function chordOf(d) {
+  /* ---------- scales and worlds ---------- */
+  const SCALES = {
+    ionian: [0, 2, 4, 5, 7, 9, 11],
+    dorian: [0, 2, 3, 5, 7, 9, 10],
+    phrygian: [0, 1, 3, 5, 7, 8, 10],
+    lydian: [0, 2, 4, 6, 7, 9, 11],
+    mixolydian: [0, 2, 4, 5, 7, 9, 10],
+    aeolian: [0, 2, 3, 5, 7, 8, 10],
+    locrian: [0, 1, 3, 5, 6, 8, 10],
+    harmonic: [0, 2, 3, 5, 7, 8, 11],
+    whole: [0, 2, 4, 6, 8, 10]
+  };
+  const WORLDS = {
+    he:     { name: 'he',     mode: 'lydian',   tonic: 3,  bpm: 123, prog: [0, 3] },
+    she:    { name: 'she',    mode: 'whole',    tonic: 11, bpm: 133, prog: [0, 5, 3, 4] },
+    search: { name: 'search', mode: 'harmonic', tonic: 7,  bpm: 85,  prog: [0, 5, 3, 4] },
+    meet:   { name: 'meet',   mode: 'whole',    tonic: 11, bpm: 85,  prog: [0, 3] },
+    light:  { name: 'light',  mode: 'ionian',   tonic: 2,  bpm: 95,  prog: [0, 3, 0, 6] },
+    final:  { name: 'final',  mode: 'ionian',   tonic: 2,  bpm: 95,  prog: [0] }
+  };
+  /* just intonation where the interval is pure, equal temperament otherwise
+     (the whole-tone scale has no pure fifth and must keep its colour) */
+  const JI = { 0: 1, 3: 6 / 5, 4: 5 / 4, 5: 4 / 3, 7: 3 / 2, 8: 8 / 5, 9: 5 / 3, 12: 2, 14: 9 / 4, 15: 12 / 5, 16: 5 / 2 };
+  const ratio = (semi) => JI[semi] || Math.pow(2, semi / 12);
+
+  function chordOf(world, d) {
+    const s = SCALES[world.mode], n = s.length;
+    const deg = (x) => { const o = Math.floor(x / n), i = ((x % n) + n) % n; return s[i] + 12 * o; };
+    const hz = (semi) => C2 * Math.pow(2, (world.tonic + semi) / 12);
     const r = deg(d);
-    return { d, rootS: r, root: hz(r), minor: deg(d + 2) - r === 3 };
+    return {
+      d, world: world.name,
+      root: hz(r),
+      third: deg(d + 2) - r, fifth: deg(d + 4) - r, ninth: deg(d + 1) + 12 - r,
+      note: (off, oct) => hz(deg(d + off) + 12 * oct)
+    };
   }
 
-  /* ---------- rhythm: Euclidean patterns ---------- */
+  /* ---------- rhythm ---------- */
   function euclid(k, n, rot) {
     const p = [];
     for (let i = 0; i < n; i++) p.push((i * k) % n < k ? 1 : 0);
@@ -58,7 +83,6 @@
     param.setValueAtTime(cur, t);
     param.linearRampToValueAtTime(value, t + seconds);
   }
-  /* soft one-shot envelope helper */
   function env(g, t, peak, attack, decay) {
     g.gain.setValueAtTime(0.0001, t);
     g.gain.exponentialRampToValueAtTime(Math.max(0.0002, peak), t + attack);
@@ -67,19 +91,36 @@
   const octOf = (y01) => (y01 < 0.34 ? 1 : y01 > 0.66 ? -1 : 0);
 
   /* -------------------------------------------------------
-     Voice base:
-       out → pan → bus            (dry)
-             pan → reverb send / delay send
-       out → doubler (mod delay, panned) → bus
+     Clock: one world's transport (tempo glides, the world changes on a bar line)
+     ------------------------------------------------------- */
+  class Clock {
+    constructor(id, world) {
+      this.id = id;
+      this.world = world;
+      this.pending = null;
+      this.bpm = world.bpm;
+      this.bpmTarget = world.bpm;
+      this.step = 0;
+      this.nextTime = 0;
+      this.progStart = 0;
+      this.chord = chordOf(world, world.prog[0]);
+    }
+    get stepDur() { return 60 / this.bpm / 4; }
+    setWorld(w) { this.pending = w; this.bpmTarget = w.bpm; }
+  }
+
+  /* -------------------------------------------------------
+     Voice base
      ------------------------------------------------------- */
   class Voice {
-    constructor(engine, id, sends) {
+    constructor(engine, id, sends, clockId) {
       this.engine = engine;
       this.id = id;
+      this.clockId = clockId;
       this.on = false;
       this.onAt = 0;
       this.offAt = 0;
-      this.sends = sends;                     // { rev, del }
+      this.sends = sends;
       this.place = { x01: 0.5, y01: 0.5, col: 0, row: 0 };
       const ctx = engine.ctx;
       this.gate = ctx.createGain(); this.gate.gain.value = 0;
@@ -92,8 +133,6 @@
       this.pan.connect(engine.bus);
       this.pan.connect(this.rev).connect(engine.revIn);
       this.pan.connect(this.del).connect(engine.delIn);
-
-      // doubler: ~22 ms, slowly modulated (≈ slight detune), panned away from the dry voice
       this.dblDelay = ctx.createDelay(0.1); this.dblDelay.delayTime.value = 0.022;
       this.dblLfo = ctx.createOscillator(); this.dblLfo.frequency.value = 0.37 + Math.random() * 0.2;
       this.dblLfoAmt = ctx.createGain(); this.dblLfoAmt.gain.value = 0.0028;
@@ -103,7 +142,6 @@
       this.out.connect(this.dblDelay).connect(this.dblGain).connect(this.dblPan).connect(engine.bus);
       this.dblPan.connect(engine.revIn);
     }
-    /* quantized on/off: takes effect at `at` (next beat) */
     setOn(on, at) {
       on = !!on;
       if (on === this.on) return on ? this.onAt : this.offAt;
@@ -115,22 +153,20 @@
     active(t) { return this.on ? t >= this.onAt - 1e-4 : t < this.offAt - 1e-4; }
     setVolume(v) { glide(this.vol.gain, v, this.engine.ctx, 0.04); }
     setDouble(a) { glide(this.dblGain.gain, a ? 0.75 : 0, this.engine.ctx, 0.08); }
-    /* position on the poster */
     setPlacement(p) {
       this.place = p;
       const ctx = this.engine.ctx;
       glide(this.pan.pan, clamp((p.x01 * 2 - 1) * 0.75, -0.8, 0.8), ctx, 0.12);
-      const depth = 0.7 + 0.6 * (1 - p.y01);               // higher on the poster = further away
-      glide(this.rev.gain, this.sends.rev * depth, ctx, 0.2);
+      glide(this.rev.gain, this.sends.rev * (0.7 + 0.6 * (1 - p.y01)), ctx, 0.2);
     }
     step() {}
     chord() {}
   }
 
-  /* -------- circle: breath — just-intonation pad -------- */
+  /* -------- circle: she — the pad -------- */
   class PadVoice extends Voice {
     constructor(engine) {
-      super(engine, 'circle', { rev: 0.55, del: 0.08 });
+      super(engine, 'circle', { rev: 0.55, del: 0.08 }, 'she');
       const ctx = engine.ctx;
       this.filter = ctx.createBiquadFilter(); this.filter.type = 'lowpass';
       this.filter.frequency.value = 900; this.filter.Q.value = 1.4;
@@ -149,21 +185,19 @@
       this.ninth = mk('sine', -2, 0.05);
       this.bright = mk('sawtooth', 6, 0);
       this.sub = mk('sine', 0, 0.22);
-      // slow breathing of the filter
       this.lfo = ctx.createOscillator(); this.lfo.frequency.value = 0.08;
       this.lfoAmt = ctx.createGain(); this.lfoAmt.gain.value = 120;
       this.lfo.connect(this.lfoAmt).connect(this.filter.frequency); this.lfo.start();
       this.timbre = 0.5;
-      this.chord(chordOf(0), ctx.currentTime);
+      this.chord(engine.clocks.she.chord, ctx.currentTime);
       this.setTimbre(0.5);
     }
-    /* just intonation over the (equal-tempered) chord root */
     chord(c, t) {
       const ctx = this.engine.ctx, r = c.root * 2, tau = 0.35;
       glide(this.root.o.frequency, r, ctx, tau, t);
-      glide(this.fifth.o.frequency, r * 3 / 2, ctx, tau, t);
-      glide(this.third.o.frequency, r * 2 * (c.minor ? 6 / 5 : 5 / 4), ctx, tau, t);
-      glide(this.ninth.o.frequency, r * 9 / 4, ctx, tau, t);
+      glide(this.fifth.o.frequency, r * ratio(c.fifth), ctx, tau, t);
+      glide(this.third.o.frequency, r * 2 * ratio(c.third), ctx, tau, t);
+      glide(this.ninth.o.frequency, r * ratio(c.ninth), ctx, tau, t);
       glide(this.bright.o.frequency, r, ctx, tau, t);
       glide(this.sub.o.frequency, r / 2, ctx, tau, t);
     }
@@ -188,11 +222,11 @@
     }
   }
 
-  /* -------- oval: child of the circle — a motif that develops -------- */
+  /* -------- oval: a child — the motif -------- */
   const MOTIF = [0, 2, 4, 1, 3, 5, 2, 6];
   class MotifVoice extends Voice {
     constructor(engine) {
-      super(engine, 'oval', { rev: 0.45, del: 0.32 });
+      super(engine, 'oval', { rev: 0.45, del: 0.32 }, 'she');
       const ctx = engine.ctx;
       this.filter = ctx.createBiquadFilter(); this.filter.type = 'lowpass';
       this.filter.frequency.value = 2600; this.filter.Q.value = 0.9;
@@ -202,7 +236,6 @@
       this.bar = 0;
     }
     follow(t) { glide(this.filter.frequency, 1000 + 3600 * t, this.engine.ctx, 0.08); }
-    /* k01: arrow length normalised → phrase length + volume */
     setShape(k01) {
       this.len = 3 + Math.round(clamp(k01, 0, 1) * 5);
       glide(this.vol.gain, 0.25 + 0.7 * clamp(k01, 0, 1), this.engine.ctx, 0.05);
@@ -215,15 +248,14 @@
     step(s, t, c) {
       if (s % 16 === 0) this.bar++;
       if (!this.active(t) || s % 2) return;
-      const e8 = (s % 16) / 2;                   // eighth inside the bar
-      if (e8 >= this.len) return;                // the rest of the bar breathes
-      const form = Math.floor(this.bar / 4) % 4; // every 4 bars the motif develops
+      const e8 = (s % 16) / 2;
+      if (e8 >= this.len) return;
+      const form = Math.floor(this.bar / 4) % 4;
       let m = MOTIF[e8 % MOTIF.length];
-      if (form === 1) m = m + 2;                                  // sequence up a third
-      else if (form === 2) m = -m;                                // inversion
-      else if (form === 3) m = MOTIF[(this.len - 1 - e8) % MOTIF.length]; // retrograde
-      const reg = octOf(this.place.y01);
-      const f = hz(deg(c.d + m) + 36 + reg * 12);
+      if (form === 1) m = m + 2;
+      else if (form === 2) m = -m;
+      else if (form === 3) m = MOTIF[(this.len - 1 - e8) % MOTIF.length];
+      const f = c.note(m, 3 + octOf(this.place.y01));
       const ctx = this.engine.ctx;
       const o = ctx.createOscillator(); o.type = 'triangle'; o.frequency.value = f;
       const o2 = ctx.createOscillator(); o2.type = 'sine'; o2.frequency.value = f * 2;
@@ -238,20 +270,19 @@
     }
   }
 
-  /* -------- square: metre — Euclidean percussion -------- */
+  /* -------- square: he — Euclidean pulse -------- */
   const SQ = {
-    1: (r) => euclid(3, 8, r).concat(euclid(3, 8, r)),   // tresillo
-    2: (r) => euclid(5, 8, r).concat(euclid(5, 8, r)),   // cinquillo
+    1: (r) => euclid(3, 8, r).concat(euclid(3, 8, r)),
+    2: (r) => euclid(5, 8, r).concat(euclid(5, 8, r)),
     3: (r) => euclid(11, 16, r)
   };
   class PercVoice extends Voice {
     constructor(engine) {
-      super(engine, 'square', { rev: 0.1, del: 0.05 });
+      super(engine, 'square', { rev: 0.1, del: 0.05 }, 'he');
       this.layers = 1;
       this.vol.gain.value = 0.85;
     }
     pattern() { return SQ[this.layers](this.place.col * 3); }
-    hitsAt(q) { return this.pattern()[q] === 1; }
     layerOf(q) {
       const rot = this.place.col * 3;
       if (SQ[1](rot)[q]) return 1;
@@ -261,18 +292,16 @@
     step(s, t, c) {
       if (!this.active(t)) return;
       const q = s % 16;
-      if (!this.hitsAt(q)) return;
+      if (!this.pattern()[q]) return;
       const layer = this.layerOf(q);
       const vel = q === 0 ? 1 : layer === 1 ? 0.82 : layer === 2 ? 0.6 : 0.42;
-      const reg = octOf(this.place.y01);
-      this.hit(t, vel, c.root * Math.pow(2, reg), layer);
+      this.hit(t, vel, c.root * Math.pow(2, octOf(this.place.y01)), layer);
       this.engine.duck(t, vel);
       this.engine.visual(t, 'square', layer, vel);
     }
     hit(t, vel, root, layer) {
       const ctx = this.engine.ctx;
       const f = layer === 3 ? root * 4 : root * 2;
-      // pitched body
       const o = ctx.createOscillator(); o.type = layer === 1 ? 'sine' : 'square';
       o.frequency.setValueAtTime(f * 2.6, t);
       o.frequency.exponentialRampToValueAtTime(f, t + 0.04);
@@ -283,7 +312,6 @@
       env(g, t, (layer === 1 ? 0.75 : 0.42) * vel, 0.003, layer === 3 ? 0.07 : layer === 1 ? 0.24 : 0.15);
       o.connect(lp).connect(g).connect(this.gate);
       o.start(t); o.stop(t + 0.3);
-      // click
       const n = ctx.createBufferSource(); n.buffer = this.engine.noise;
       const hp = ctx.createBiquadFilter(); hp.type = 'highpass';
       hp.frequency.value = layer === 3 ? 7000 : 2600;
@@ -294,11 +322,11 @@
     }
   }
 
-  /* -------- rect: child of the square — polymeter (5 / 7 / 9 against 16) -------- */
+  /* -------- rect: a child — polymeter -------- */
   const RC = { 1: [2, 5], 2: [3, 7], 3: [5, 9] };
   class GlitchVoice extends Voice {
     constructor(engine) {
-      super(engine, 'rect', { rev: 0.16, del: 0.22 });
+      super(engine, 'rect', { rev: 0.16, del: 0.22 }, 'he');
       const ctx = engine.ctx;
       this.layers = 1;
       this.k = 0;
@@ -315,11 +343,11 @@
       const pat = euclid(k, n, this.place.col);
       const i = this.k % n;
       if (!pat[i]) return;
-      const reg = octOf(this.place.y01);
       const jumps = [1, 1.5, 1, 2, 1, 1.5, 0.75, 1, 2];
-      const f = c.root * 8 * Math.pow(2, reg) * (this.layers === 3 ? jumps[i % jumps.length] : 1);
+      const f = c.root * 8 * Math.pow(2, octOf(this.place.y01)) * (this.layers === 3 ? jumps[i % jumps.length] : 1);
       const ratchet = this.layers === 3 && i === 0 ? 3 : this.layers >= 2 && i === n - 1 ? 2 : 1;
-      for (let r = 0; r < ratchet; r++) this.blip(t + (r * STEP) / ratchet, f * (r ? 1.5 : 1), r ? 0.55 : 0.9);
+      const step = this.engine.clockOf(this).stepDur;
+      for (let r = 0; r < ratchet; r++) this.blip(t + (r * step) / ratchet, f * (r ? 1.5 : 1), r ? 0.55 : 0.9);
       this.engine.visual(t, 'rect', ratchet > 1 ? 3 : this.layers === 1 ? 1 : 2, 0.8);
     }
     blip(t, f, vel) {
@@ -340,7 +368,7 @@
     }
   }
 
-  /* -------- small circles: three cells that interlock (hocket) -------- */
+  /* -------- small circles: children — interlocking cells -------- */
   const CELLS = {
     blip:  { steps: [0, 6, 11], degs: [4, 7, 9] },
     beep:  { steps: [3, 8, 14], degs: [2, 5, 7] },
@@ -349,7 +377,7 @@
   };
   class FxVoice extends Voice {
     constructor(engine, id, kind) {
-      super(engine, id, { rev: 0.38, del: 0.3 });
+      super(engine, id, { rev: 0.38, del: 0.3 }, 'he');
       this.kind = kind;
       this.cell = CELLS[kind] || CELLS.blip;
       this.vol.gain.value = 0.5;
@@ -360,8 +388,7 @@
       const idx = this.cell.steps.indexOf(q);
       if (idx < 0) return;
       const ctx = this.engine.ctx, k = this.kind;
-      const reg = octOf(this.place.y01);
-      const f = hz(deg(c.d + this.cell.degs[idx]) + 36 + reg * 12);
+      const f = c.note(this.cell.degs[idx], 3 + octOf(this.place.y01));
       if (k === 'click') {
         const n = ctx.createBufferSource(); n.buffer = this.engine.noise;
         const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 7000;
@@ -370,22 +397,18 @@
         n.start(t, Math.random()); n.stop(t + 0.02);
       } else {
         const o = ctx.createOscillator(), g = ctx.createGain();
-        if (k === 'blip') { o.type = 'sine'; o.frequency.setValueAtTime(f, t); env(g, t, 0.24, 0.003, 0.09); }
+        if (k === 'blip') { o.type = 'sine'; o.frequency.setValueAtTime(f, t); env(g, t, 0.24, 0.003, 0.09); o.connect(g).connect(this.gate); }
         else if (k === 'beep') {
           o.type = 'square'; o.frequency.setValueAtTime(f, t);
           const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f * 2; bp.Q.value = 2;
           env(g, t, 0.16, 0.004, 0.1); o.connect(bp).connect(g).connect(this.gate);
-          o.start(t); o.stop(t + 0.14);
-          this.engine.visual(t, this.id, 0, 0.8);
-          return;
-        } else {           // chirp: glides up into its note
+        } else {
           o.type = 'sine';
           o.frequency.setValueAtTime(f * 0.5, t);
           o.frequency.exponentialRampToValueAtTime(f, t + 0.05);
-          env(g, t, 0.2, 0.004, 0.08);
+          env(g, t, 0.2, 0.004, 0.08); o.connect(g).connect(this.gate);
         }
-        o.connect(g).connect(this.gate);
-        o.start(t); o.stop(t + 0.15);
+        o.start(t); o.stop(t + 0.16);
       }
       this.engine.visual(t, this.id, 0, 0.8);
     }
@@ -400,7 +423,6 @@
     capsule: { wave: 'triangle', mul: 3, rhythmic: false },
     fx: { wave: 'sine', mul: 8, rhythmic: true }
   };
-  // ratio path from rub (16:15) to fifth (3:2), interpolated in log space
   const PATH = [16 / 15, 9 / 8, 4 / 3, 3 / 2];
   function ratioAt(l) {
     const x = clamp(l, 0, 1) * (PATH.length - 1), i = Math.min(PATH.length - 2, Math.floor(x)), f = x - i;
@@ -416,7 +438,6 @@
       this.lvl = 0;
       this.oscA = ctx.createOscillator(); this.oscA.type = a.wave;
       this.oscB = ctx.createOscillator(); this.oscB.type = b.wave;
-      // ring path (friction) + sum path (interval)
       this.ring = ctx.createGain(); this.ring.gain.value = 0;
       this.oscA.connect(this.ring); this.oscB.connect(this.ring.gain);
       this.ringMix = ctx.createGain(); this.ringMix.gain.value = 1;
@@ -428,7 +449,7 @@
       const rhythmic = a.rhythmic || b.rhythmic;
       this.trem = ctx.createGain(); this.trem.gain.value = rhythmic ? 0.55 : 0.85;
       this.lfo = ctx.createOscillator(); this.lfo.type = rhythmic ? 'square' : 'sine';
-      this.lfo.frequency.value = rhythmic ? (BPM / 60) * 2 : 0.2;
+      this.lfo.frequency.value = rhythmic ? (engine.clocks.he.bpm / 60) * 2 : 0.2;
       this.lfoSmooth = ctx.createBiquadFilter(); this.lfoSmooth.type = 'lowpass'; this.lfoSmooth.frequency.value = 35;
       this.lfoAmt = ctx.createGain(); this.lfoAmt.gain.value = rhythmic ? 0.42 : 0.12;
       this.lfo.connect(this.lfoSmooth).connect(this.lfoAmt).connect(this.trem.gain);
@@ -476,18 +497,19 @@
       this.hybrids = new Map();
       this.running = false;
       this.scenePlaying = false;
-      this.step = 0;
-      this.nextTime = 0;
-      this.chord = chordOf(0);
-      this.prog = 1;
+      this.united = false;
+      this.dialog = false;
       this.energy = 0;
       this.visualQueue = [];
       this.userVolume = 0.85;
       this._timer = null;
       this._suspendTimer = null;
+      this.clocks = { he: new Clock('he', WORLDS.he), she: new Clock('she', WORLDS.she) };
       this.levels = { rms: 0, level: 0, bands: new Float32Array(8) };
     }
     get ready() { return !!this.ctx; }
+    get chord() { return this.clocks.he.chord; }
+    clockOf(v) { return this.united ? this.clocks.he : this.clocks[v.clockId]; }
 
     ensure() {
       if (this.ctx) {
@@ -498,7 +520,6 @@
       if (!AC) return null;
       const ctx = (this.ctx = new AC({ latencyHint: 'interactive' }));
 
-      /* master: bus + returns → mix → air → saturation → scene → master → comp → analyser */
       this.bus = ctx.createGain();
       this.mix = ctx.createGain();
       this.air = ctx.createBiquadFilter(); this.air.type = 'lowpass'; this.air.frequency.value = 5000; this.air.Q.value = 0.5;
@@ -517,7 +538,6 @@
       this.mix.connect(this.air).connect(this.sat).connect(this.scene).connect(this.master)
         .connect(this.comp).connect(this.analyser).connect(ctx.destination);
 
-      /* reverb: generated stereo impulse, 3.4 s */
       this.revIn = ctx.createGain();
       this.convolver = ctx.createConvolver();
       this.convolver.buffer = this._impulse(3.4);
@@ -525,11 +545,8 @@
       this.revOut = ctx.createGain(); this.revOut.gain.value = 0.55;
       this.revIn.connect(this.revPre).connect(this.convolver).connect(this.revOut).connect(this.mix);
 
-      /* ping-pong delay, dotted eighth */
       this.delIn = ctx.createGain();
-      const dt = STEP * 3;
-      this.dL = ctx.createDelay(2); this.dL.delayTime.value = dt;
-      this.dR = ctx.createDelay(2); this.dR.delayTime.value = dt;
+      this.dL = ctx.createDelay(3); this.dR = ctx.createDelay(3);
       this.fb = ctx.createGain(); this.fb.gain.value = 0.38;
       this.fbLp = ctx.createBiquadFilter(); this.fbLp.type = 'lowpass'; this.fbLp.frequency.value = 3200;
       const pL = ctx.createStereoPanner(), pR = ctx.createStereoPanner();
@@ -540,6 +557,12 @@
       this.dL.connect(pL).connect(this.delOut); this.dR.connect(pR).connect(this.delOut);
       this.delOut.connect(this.mix);
       this.delOut.connect(this.revIn);
+      this._delayTime();
+
+      // the dialogue of the meeting: his call and her answer
+      this.dialogOut = ctx.createGain(); this.dialogOut.gain.value = 0.9;
+      this.dialogOut.connect(this.bus);
+      const ds = ctx.createGain(); ds.gain.value = 0.5; this.dialogOut.connect(ds).connect(this.revIn);
 
       this._time = new Float32Array(this.analyser.fftSize);
       this._freq = new Uint8Array(this.analyser.frequencyBinCount);
@@ -574,17 +597,21 @@
         let lp = 0;
         for (let i = 0; i < n; i++) {
           const t = i / n;
-          const k = 0.35 + 0.6 * t;                  // darker as it decays
+          const k = 0.35 + 0.6 * t;
           lp += (Math.random() * 2 - 1 - lp) * (1 - k);
           d[i] = lp * Math.pow(1 - t, 2.6) * (i < sr * 0.012 ? i / (sr * 0.012) : 1);
         }
       }
       return buf;
     }
+    _delayTime() {
+      if (!this.ctx) return;
+      const dt = this.clocks.he.stepDur * 3;            // dotted eighth of the leading clock
+      glide(this.dL.delayTime, dt, this.ctx, 0.5);
+      glide(this.dR.delayTime, dt, this.ctx, 0.5);
+    }
 
-    addFxVoice(id, kind) { if (this.ctx && !this.voices[id]) this.voices[id] = new FxVoice(this, id, kind); }
-
-    /* ---------- scene ---------- */
+    /* ---------- scene (screen-level) ---------- */
     startScene() {
       const ctx = this.ensure();
       if (!ctx) return;
@@ -615,46 +642,96 @@
     startTransport() {
       if (this.running) return;
       this.running = true;
-      this.nextTime = this.ctx.currentTime + 0.06;
-      this.step = Math.ceil(this.step / 16) * 16;        // restart on a downbeat
+      const t0 = this.ctx.currentTime + 0.06;
+      for (const c of Object.values(this.clocks)) {
+        c.nextTime = t0;
+        c.step = Math.ceil(c.step / 16) * 16;
+      }
       this._timer = setInterval(() => this._tick(), TICK_MS);
       this._tick();
     }
     stopTransport() { this.running = false; clearInterval(this._timer); }
-    /* time of the next beat that has not been scheduled yet */
-    nextBeat() {
+    activeClocks() { return this.united ? [this.clocks.he] : [this.clocks.he, this.clocks.she]; }
+    nextBeat(v) {
       if (!this.ctx) return 0;
-      if (!this.running) return this.ctx.currentTime + 0.04;   // the transport's first downbeat lands just after
-      let s = this.step;
+      if (!this.running) return this.ctx.currentTime + 0.04;
+      const c = v ? this.clockOf(v) : this.clocks.he;
+      let s = c.step;
       while (s % 4) s++;
-      return this.nextTime + (s - this.step) * STEP;
+      return c.nextTime + (s - c.step) * c.stepDur;
+    }
+    nextBar() {
+      const c = this.clocks.he;
+      if (!this.running) return this.ctx.currentTime + 0.04;
+      let s = c.step;
+      while (s % 16) s++;
+      return c.nextTime + (s - c.step) * c.stepDur;
     }
     _tick() {
       const ctx = this.ctx;
       if (!ctx || !this.running) return;
-      if (this.nextTime < ctx.currentTime - 0.2) this.nextTime = ctx.currentTime + 0.02;
-      while (this.nextTime < ctx.currentTime + LOOKAHEAD) {
-        this._schedule(this.step, this.nextTime);
-        this.nextTime += STEP;
-        this.step++;
+      for (const c of this.activeClocks()) {
+        if (c.nextTime < ctx.currentTime - 0.2) c.nextTime = ctx.currentTime + 0.02;
+        while (c.nextTime < ctx.currentTime + LOOKAHEAD) {
+          this._schedule(c, c.step, c.nextTime);
+          c.bpm += (c.bpmTarget - c.bpm) * 0.06;      // tempo glides over about two bars
+          c.nextTime += c.stepDur;
+          c.step++;
+        }
       }
     }
-    _schedule(s, t) {
-      if (s % 32 === 0) {                                 // a new chord every 2 bars
-        const p = PROGS[this.prog];
-        const c = chordOf(p[Math.floor(s / 32) % p.length]);
-        this.chord = c;
-        for (const id in this.voices) this.voices[id].chord(c, t);
-        this.hybrids.forEach((h) => h.chord(c, t));
+    voicesOn(clock) {
+      const out = [];
+      for (const id in this.voices) { const v = this.voices[id]; if (this.clockOf(v) === clock) out.push(v); }
+      return out;
+    }
+    _schedule(c, s, t) {
+      if (s % 16 === 0 && c.pending) {                  // a new world starts on a bar line
+        c.world = c.pending; c.pending = null; c.progStart = s;
+        if (c.id === 'he') this._delayTime();
+        if (c.id === 'he') this.visual(t, 'world', 0, 1, c.world.name);
       }
-      if (s % 16 === 0) {                                 // energy: voices playing together build the piece
+      if ((s - c.progStart) % 32 === 0) {
+        const p = c.world.prog;
+        const chord = chordOf(c.world, p[Math.floor((s - c.progStart) / 32) % p.length]);
+        c.chord = chord;
+        for (const v of this.voicesOn(c)) v.chord(chord, t);
+        if (c.id === 'he') this.hybrids.forEach((h) => h.chord(chord, t));
+      }
+      const vs = this.voicesOn(c);
+      if (c.id === 'he' && s % 16 === 0) {
         let n = 0;
         for (const id in this.voices) if (this.voices[id].active(t)) n++;
         this.energy = clamp(this.energy + (n >= 2 ? 0.05 + 0.01 * (n - 2) : -0.08), 0, 1);
         this._applyEnergy(t);
       }
-      for (const id in this.voices) this.voices[id].step(s, t, this.chord);
-      if (s % 4 === 0) this.visual(t, 'beat', (s % 16) / 4, 1);
+      for (const v of vs) v.step(s, t, c.chord);
+      if (c.id === 'he' && this.dialog) this._dialog(s, t, c);
+      if (c.id === 'he' && s % 4 === 0) this.visual(t, 'beat', (s % 16) / 4, 1);
+    }
+    /* «где ты» rises and stays open, «я тут, привет» falls home */
+    _dialog(s, t, c) {
+      const q = s % 16, bar = Math.floor(s / 16);
+      if (q === 0) this.visual(t, 'dialog', bar % 2, 1);
+      if (q % 2 || q > 6) return;
+      const i = q / 2;
+      const call = bar % 2 === 0;
+      const degs = call ? [0, 2, 4, 6] : [4, 3, 1, 0];
+      const f = c.chord.note(degs[i], 3);
+      const ctx = this.ctx;
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = call ? 'triangle' : 'sine';
+      o.frequency.setValueAtTime(f, t);
+      if (!call) {                                       // her answer sings with a slow vibrato
+        const vib = ctx.createOscillator(), va = ctx.createGain();
+        vib.frequency.value = 5; va.gain.value = f * 0.006;
+        vib.connect(va).connect(o.frequency); vib.start(t); vib.stop(t + 0.9);
+      }
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(call ? 0.12 : 0.15, t + 0.03);
+      g.gain.setTargetAtTime(0, t + 0.12, i === 3 ? 0.35 : 0.16);
+      o.connect(g).connect(this.dialogOut);
+      o.start(t); o.stop(t + 1.6);
     }
     _applyEnergy(t) {
       const ctx = this.ctx, e = this.energy;
@@ -668,30 +745,89 @@
       if (this.voices.oval) this.voices.oval.duck(t, 0.4 * vel);
     }
 
-    /* the piece resolves: a tonic chord with a long tail into the reverb */
+    /* ---------- the story ---------- */
+    /* a world for one clock, or — once united — for the shared clock */
+    setWorld(name, clockId = 'he') {
+      const w = WORLDS[name];
+      if (!w) return;
+      if (this.united || clockId === 'he') this.clocks.he.setWorld(w);
+      else this.clocks.she.setWorld(w);
+    }
+    /* the two worlds become one: everything follows his clock from the next bar */
+    unite(name) {
+      if (this.united) { this.setWorld(name); return; }
+      const he = this.clocks.he, she = this.clocks.she;
+      he.setWorld(WORLDS[name]);
+      this.united = true;
+      she.pending = null;
+      if (this.ctx) for (const id in this.voices) this.voices[id].chord(he.chord, this.ctx.currentTime);
+    }
+    setDialog(on) { this.dialog = !!on; }
+    worldName() { return this.clocks.he.pending ? this.clocks.he.pending.name : this.clocks.he.world.name; }
+
+    /* a birth: two tones rub, find the fifth, and the child answers with three notes */
+    birth() {
+      if (!this.ctx || !this.scenePlaying) return 0;
+      const ctx = this.ctx, t = this.nextBeat(), c = this.chord;
+      const f = c.root * 4;
+      const a = ctx.createOscillator(), b = ctx.createOscillator(), g = ctx.createGain();
+      a.type = 'sine'; b.type = 'triangle';
+      a.frequency.setValueAtTime(f, t);
+      b.frequency.setValueAtTime(f * 16 / 15, t);
+      b.frequency.exponentialRampToValueAtTime(f * 3 / 2, t + 1.1);
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(0.09, t + 0.25);
+      g.gain.setTargetAtTime(0, t + 1.3, 0.5);
+      a.connect(g); b.connect(g); g.connect(this.bus); g.connect(this.revIn);
+      a.start(t); b.start(t); a.stop(t + 4); b.stop(t + 4);
+      [0, 2, 4].forEach((d, i) => {
+        const tt = t + 1.15 + i * 0.12;
+        const o = ctx.createOscillator(), gg = ctx.createGain();
+        o.type = 'sine'; o.frequency.value = c.note(d, 4);
+        gg.gain.setValueAtTime(0, tt);
+        gg.gain.linearRampToValueAtTime(0.08, tt + 0.01);
+        gg.gain.setTargetAtTime(0, tt + 0.05, 0.45);
+        o.connect(gg); gg.connect(this.bus); gg.connect(this.revIn);
+        o.start(tt); o.stop(tt + 2.5);
+      });
+      this.visual(t + 1.15, 'birth', 0, 1);
+      return t + 1.15;
+    }
+
+    /* the closing chord in D major (just), long tail into the reverb */
     resolve() {
       if (!this.ctx || !this.scenePlaying) return;
-      const ctx = this.ctx, t = this.nextBeat() + STEP * 4;
+      const ctx = this.ctx, t = this.nextBar();
       const out = ctx.createGain(); out.gain.value = 1;
       out.connect(this.bus); out.connect(this.revIn);
-      const notes = [hz(12), hz(19), hz(24) * 9 / 8, hz(24) * 6 / 5, hz(31)];   // D3 A3 E4 F4 A4 (just)
+      const D = 73.416;
+      const notes = [D * 2, D * 3, D * 4 * 9 / 8, D * 4 * 5 / 4, D * 6];   // D3 A3 E4 F♯4 A4
       notes.forEach((f, i) => {
         const o = ctx.createOscillator(); o.type = i % 2 ? 'triangle' : 'sine'; o.frequency.value = f;
         const g = ctx.createGain();
         g.gain.setValueAtTime(0, t);
         g.gain.linearRampToValueAtTime(0.07, t + 0.35 + i * 0.06);
-        g.gain.setTargetAtTime(0, t + 0.6, 1.6);
+        g.gain.setTargetAtTime(0, t + 0.6, 1.8);
         o.connect(g).connect(out);
-        o.start(t); o.stop(t + 9);
+        o.start(t); o.stop(t + 10);
       });
       this.energy = 0;
       this._applyEnergy();
       this.visual(t, 'resolve', 0, 1);
     }
+    /* back to the beginning: two separate worlds again */
+    resetStory() {
+      this.united = false;
+      this.dialog = false;
+      const he = this.clocks.he, she = this.clocks.she;
+      he.setWorld(WORLDS.he); she.setWorld(WORLDS.she);
+      if (this.running) she.nextTime = Math.max(she.nextTime, this.ctx.currentTime + 0.05);
+    }
 
-    visual(time, id, layer, vel) {
+    visual(time, id, layer, vel, data) {
       if (this.visualQueue.length > 256) this.visualQueue.shift();
-      this.visualQueue.push({ time, id, layer, vel });
+      this.visualQueue.push({ time, id, layer, vel, data });
+      this.visualQueue.sort((a, b) => a.time - b.time);
     }
     drainVisual(cb) {
       if (!this.ctx) return;
@@ -700,16 +836,14 @@
     }
 
     /* ---------- voice API ---------- */
-    setVoiceOn(id, on) { const v = this.voices[id]; return v ? v.setOn(on, this.nextBeat()) : 0; }
+    setVoiceOn(id, on) { const v = this.voices[id]; return v ? v.setOn(on, this.nextBeat(v)) : 0; }
     setVolume(id, val) { const v = this.voices[id]; if (v) v.setVolume(val); }
     setTimbre(val) { if (this.voices.circle) this.voices.circle.setTimbre(val); }
     setOvalShape(k01) { if (this.voices.oval) this.voices.oval.setShape(k01); }
     setLayers(id, n) { const v = this.voices[id]; if (v) v.layers = clamp(n, 1, 3); }
     setDoubles(on, map) { for (const id in this.voices) this.voices[id].setDouble(on && !!map[id]); }
     setPlacement(id, p) { const v = this.voices[id]; if (v) v.setPlacement(p); }
-    setProgression(i) { this.prog = clamp(i, 0, PROGS.length - 1); }
 
-    /* ---------- hybrids ---------- */
     updateHybrid(key, typeA, typeB, level) {
       if (!this.ctx) return;
       let h = this.hybrids.get(key);
@@ -726,7 +860,6 @@
       } else h.silentSince = 0;
     }
 
-    /* ---------- analysis ---------- */
     analyse() {
       const L = this.levels;
       if (!this.ctx || !this.analyser) {
@@ -756,5 +889,5 @@
 
   GP.AudioEngine = AudioEngine;
   GP.audio = new AudioEngine();
-  GP.AUDIO_CONST = { BPM, STEP };
+  GP.WORLDS = WORLDS;
 })();

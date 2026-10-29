@@ -362,3 +362,8 @@
   .vslider { width: 56px; }
   .vslider__knob { width: 26px; height: 26px; margin: -13px 0 0 -13px; }
 }
+
+/* ---------- the story ---------- */
+/* forms that are not born yet (or have left) */
+.body.is-unborn { visibility: hidden; pointer-events: none !important; }
+.body.is-unborn > * { pointer-events: none !important; }

@@ -72,6 +72,11 @@
   to   { filter: brightness(1.12) saturate(1.15); }
 }
 
+/* the finale: the two who are left breathe together */
+.body.is-final .main {
+  animation: soft-breathe 4.2s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .good-pop, .good-pop.is-out { animation-duration: .01s; }
   .corner.is-calling,

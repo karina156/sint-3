@@ -80,8 +80,17 @@
       this.dirty = true;
     }
     add(id, type, localPoly) {
-      this.items.push({ id, type, local: localPoly, world: localPoly.map((p) => p.slice()), aabb: [0, 0, 0, 0], area: 1, key: '' });
+      this.items.push({ id, type, local: localPoly, world: localPoly.map((p) => p.slice()), aabb: [0, 0, 0, 0], area: 1, key: '', enabled: true });
       this.dirty = true;
+    }
+    /* a form that is not on the poster (not born yet, or gone) takes no part */
+    setEnabled(id, on) {
+      const it = this.items.find((x) => x.id === id);
+      if (!it || it.enabled === on) return;
+      it.enabled = on;
+      it.key = '';
+      this.dirty = true;
+      if (!on) for (const k of [...this.pairs.keys()]) if (k.split('|').includes(id)) this.pairs.delete(k);
     }
     /* tx, ty, s: body centre in px + uniform scale */
     update(id, tx, ty, s) {
@@ -109,6 +118,7 @@
       for (let i = 0; i < items.length; i++) {
         for (let j = i + 1; j < items.length; j++) {
           const A = items[i], B = items[j];
+          if (!A.enabled || !B.enabled) continue;
           const key = A.id < B.id ? A.id + '|' + B.id : B.id + '|' + A.id;
           let ratio = 0;
           if (!(A.aabb[2] < B.aabb[0] || B.aabb[2] < A.aabb[0] || A.aabb[3] < B.aabb[1] || B.aabb[3] < A.aabb[1])) {

@@ -252,7 +252,7 @@
       const ui = this.ui;
       ui.bodies.forEach((b, i) => {
         setTimeout(() => {
-          if (b.mode === 'drag') return;
+          if (b.mode === 'drag' || b.unborn) return;
           const off = b.off[ui.layout.name];
           const ang = Math.random() * Math.PI * 2;
           const mag = 170 + Math.random() * 60;                          // px/s

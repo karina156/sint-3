@@ -115,8 +115,8 @@
   const CORNERS = [
     { id: 'play', ch: '+', anchor: 'tl', c: [35.172, 29.907], dx: -0.5, dy: 18.63, label: 'Play scene' },
     { id: 'pause', ch: '-', anchor: 'tr', c: [32.989, 29.907], dx: 0, dy: 16.0, label: 'Pause scene' },
-    { id: 'kill', ch: 'k', anchor: 'bl', c: [35.172, 29.612], dx: 0, dy: 20.6, label: 'Kill all voices' },
-    { id: 'zero', ch: 'z', anchor: 'br', c: [32.989, 29.612], dx: 0, dy: 15.27, label: 'Return shapes home' }
+    { id: 'kill', ch: 'k', anchor: 'bl', c: [35.172, 29.612], dx: 0, dy: 20.6, label: 'Finale: all voices end' },
+    { id: 'zero', ch: 'z', anchor: 'br', c: [32.989, 29.612], dx: 0, dy: 15.27, label: 'Start the story again' }
   ];
 
   /* ---------- body definitions ---------- */
@@ -493,7 +493,7 @@
       const sp = Math.hypot(vx, vy);
       let a = p.s, bb = 0, c = 0, d = p.s;
       const k = Math.min(0.075, sp / 6500);
-      const pulse = 1 + b.pulse;
+      const pulse = (1 + b.pulse) * (b.grow == null ? 1 : b.grow);
       if (k > 0.002) {
         const ux = vx / sp, uy = vy / sp;
         const s1 = 1 + k, s2 = 1 - k * 0.8;
