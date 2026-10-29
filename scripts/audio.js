@@ -147,7 +147,7 @@
       if (on === this.on) return on ? this.onAt : this.offAt;
       this.on = on;
       if (on) this.onAt = at; else this.offAt = at;
-      glide(this.gate.gain, on ? 1 : 0, this.engine.ctx, on ? 0.04 : 0.09, at);
+      glide(this.gate.gain, on ? 1 : 0, this.engine.ctx, on ? 0.08 : 0.18, at);
       return at;
     }
     active(t) { return this.on ? t >= this.onAt - 1e-4 : t < this.offAt - 1e-4; }
@@ -169,7 +169,7 @@
       super(engine, 'circle', { rev: 0.55, del: 0.08 }, 'she');
       const ctx = engine.ctx;
       this.filter = ctx.createBiquadFilter(); this.filter.type = 'lowpass';
-      this.filter.frequency.value = 900; this.filter.Q.value = 1.4;
+      this.filter.frequency.value = 800; this.filter.Q.value = 0.7;
       this.duckG = ctx.createGain();
       this.shape = ctx.createGain(); this.shape.gain.value = 0.3;
       this.filter.connect(this.duckG).connect(this.shape).connect(this.gate);
@@ -183,7 +183,7 @@
       this.fifth = mk('triangle', 2, 0.2);
       this.third = mk('sine', 4, 0.15);
       this.ninth = mk('sine', -2, 0.05);
-      this.bright = mk('sawtooth', 6, 0);
+      this.bright = mk('triangle', 7, 0);
       this.sub = mk('sine', 0, 0.22);
       this.lfo = ctx.createOscillator(); this.lfo.frequency.value = 0.08;
       this.lfoAmt = ctx.createGain(); this.lfoAmt.gain.value = 120;
@@ -204,21 +204,21 @@
     setTimbre(t) {
       this.timbre = t = clamp(t, 0, 1);
       const ctx = this.engine.ctx;
-      glide(this.filter.frequency, 240 * Math.pow(14, t), ctx, 0.06);
-      glide(this.filter.Q, 0.8 + t * 4.5, ctx, 0.06);
+      glide(this.filter.frequency, 320 * Math.pow(7, t), ctx, 0.06);
+      glide(this.filter.Q, 0.6 + t * 1.2, ctx, 0.06);
       glide(this.root.g.gain, 0.55 - 0.22 * t, ctx, 0.06);
       glide(this.fifth.g.gain, 0.13 + 0.2 * t, ctx, 0.06);
       glide(this.third.g.gain, 0.1 + 0.12 * t, ctx, 0.06);
-      glide(this.bright.g.gain, 0.13 * t * t, ctx, 0.06);
-      glide(this.lfoAmt.gain, 60 + 240 * t, ctx, 0.2);
+      glide(this.bright.g.gain, 0.09 * t * t, ctx, 0.06);
+      glide(this.lfoAmt.gain, 40 + 120 * t, ctx, 0.2);
       if (this.engine.voices.oval) this.engine.voices.oval.follow(t);
     }
     setEnergy(e) { glide(this.ninth.g.gain, 0.03 + 0.14 * e, this.engine.ctx, 1.5); }
     setVolume(v) { glide(this.vol.gain, v * v, this.engine.ctx, 0.05); }
     duck(t, amt) {
       const g = this.duckG.gain;
-      g.setTargetAtTime(1 - amt, t, 0.004);
-      g.setTargetAtTime(1, t + 0.035, 0.13);
+      g.setTargetAtTime(1 - amt * 0.45, t, 0.012);
+      g.setTargetAtTime(1, t + 0.04, 0.18);
     }
   }
 
@@ -235,7 +235,7 @@
       this.len = 5;
       this.bar = 0;
     }
-    follow(t) { glide(this.filter.frequency, 1000 + 3600 * t, this.engine.ctx, 0.08); }
+    follow(t) { glide(this.filter.frequency, 900 + 2100 * t, this.engine.ctx, 0.08); }
     setShape(k01) {
       this.len = 3 + Math.round(clamp(k01, 0, 1) * 5);
       glide(this.vol.gain, 0.25 + 0.7 * clamp(k01, 0, 1), this.engine.ctx, 0.05);
@@ -257,15 +257,15 @@
       else if (form === 3) m = MOTIF[(this.len - 1 - e8) % MOTIF.length];
       const f = c.note(m, 3 + octOf(this.place.y01));
       const ctx = this.engine.ctx;
-      const o = ctx.createOscillator(); o.type = 'triangle'; o.frequency.value = f;
-      const o2 = ctx.createOscillator(); o2.type = 'sine'; o2.frequency.value = f * 2;
-      const g = ctx.createGain(), g2 = ctx.createGain(); g2.gain.value = 0.18;
+      const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = f;
+      const o2 = ctx.createOscillator(); o2.type = 'sine'; o2.frequency.value = f * 3;
+      const g = ctx.createGain(), g2 = ctx.createGain(); g2.gain.value = 0.08;
       o.connect(g); o2.connect(g2).connect(g); g.connect(this.filter);
       const accent = e8 === 0 ? 1 : 0.72;
       g.gain.setValueAtTime(0, t);
-      g.gain.linearRampToValueAtTime(0.17 * accent, t + 0.018);
-      g.gain.setTargetAtTime(0, t + 0.03, 0.2);
-      o.start(t); o2.start(t); o.stop(t + 1.4); o2.stop(t + 1.4);
+      g.gain.linearRampToValueAtTime(0.19 * accent, t + 0.03);
+      g.gain.setTargetAtTime(0, t + 0.05, 0.32);
+      o.start(t); o2.start(t); o.stop(t + 2); o2.stop(t + 2);
       this.engine.visual(t, 'oval', 0, accent);
     }
   }
@@ -278,7 +278,7 @@
   };
   class PercVoice extends Voice {
     constructor(engine) {
-      super(engine, 'square', { rev: 0.1, del: 0.05 }, 'he');
+      super(engine, 'square', { rev: 0.2, del: 0.06 }, 'he');
       this.layers = 1;
       this.vol.gain.value = 0.85;
     }
@@ -302,23 +302,22 @@
     hit(t, vel, root, layer) {
       const ctx = this.engine.ctx;
       const f = layer === 3 ? root * 4 : root * 2;
-      const o = ctx.createOscillator(); o.type = layer === 1 ? 'sine' : 'square';
-      o.frequency.setValueAtTime(f * 2.6, t);
-      o.frequency.exponentialRampToValueAtTime(f, t + 0.04);
-      const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.Q.value = 4;
-      lp.frequency.setValueAtTime(layer === 3 ? 5200 : 3400, t);
-      lp.frequency.exponentialRampToValueAtTime(380, t + 0.14);
+      // a soft wooden pulse: a sine body with a gentle pitch drop and a quiet overtone (marimba-like)
+      const o = ctx.createOscillator(); o.type = layer === 1 ? 'sine' : 'triangle';
+      o.frequency.setValueAtTime(f * (layer === 1 ? 1.6 : 1.12), t);
+      o.frequency.exponentialRampToValueAtTime(f, t + 0.05);
+      const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.Q.value = 0.6;
+      lp.frequency.setValueAtTime(layer === 3 ? 2600 : 1900, t);
+      lp.frequency.exponentialRampToValueAtTime(500, t + 0.25);
       const g = ctx.createGain();
-      env(g, t, (layer === 1 ? 0.75 : 0.42) * vel, 0.003, layer === 3 ? 0.07 : layer === 1 ? 0.24 : 0.15);
+      env(g, t, (layer === 1 ? 0.62 : 0.34) * vel, 0.006, layer === 3 ? 0.14 : layer === 1 ? 0.32 : 0.22);
       o.connect(lp).connect(g).connect(this.gate);
-      o.start(t); o.stop(t + 0.3);
-      const n = ctx.createBufferSource(); n.buffer = this.engine.noise;
-      const hp = ctx.createBiquadFilter(); hp.type = 'highpass';
-      hp.frequency.value = layer === 3 ? 7000 : 2600;
-      const ng = ctx.createGain();
-      env(ng, t, 0.16 * vel, 0.002, 0.03);
-      n.connect(hp).connect(ng).connect(this.gate);
-      n.start(t, Math.random() * 0.5); n.stop(t + 0.05);
+      o.start(t); o.stop(t + 0.5);
+      const ov = ctx.createOscillator(); ov.type = 'sine'; ov.frequency.value = f * 4;
+      const og = ctx.createGain();
+      env(og, t, 0.05 * vel, 0.004, 0.06);
+      ov.connect(og).connect(this.gate);
+      ov.start(t); ov.stop(t + 0.15);
     }
   }
 
@@ -326,13 +325,13 @@
   const RC = { 1: [2, 5], 2: [3, 7], 3: [5, 9] };
   class GlitchVoice extends Voice {
     constructor(engine) {
-      super(engine, 'rect', { rev: 0.16, del: 0.22 }, 'he');
+      super(engine, 'rect', { rev: 0.32, del: 0.26 }, 'he');
       const ctx = engine.ctx;
       this.layers = 1;
       this.k = 0;
-      this.crush = ctx.createWaveShaper(); this.crush.curve = engine.crushCurve;
-      this.bp = ctx.createBiquadFilter(); this.bp.type = 'bandpass';
-      this.bp.frequency.value = 2600; this.bp.Q.value = 1.3;
+      this.crush = ctx.createGain();   // was a bitcrusher; now a clean input
+      this.bp = ctx.createBiquadFilter(); this.bp.type = 'lowpass';
+      this.bp.frequency.value = 2400; this.bp.Q.value = 0.5;
       this.crush.connect(this.bp).connect(this.gate);
       this.vol.gain.value = 0.7;
     }
@@ -344,7 +343,7 @@
       const i = this.k % n;
       if (!pat[i]) return;
       const jumps = [1, 1.5, 1, 2, 1, 1.5, 0.75, 1, 2];
-      const f = c.root * 8 * Math.pow(2, octOf(this.place.y01)) * (this.layers === 3 ? jumps[i % jumps.length] : 1);
+      const f = c.root * 4 * Math.pow(2, octOf(this.place.y01)) * (this.layers === 3 ? jumps[i % jumps.length] : 1);
       const ratchet = this.layers === 3 && i === 0 ? 3 : this.layers >= 2 && i === n - 1 ? 2 : 1;
       const step = this.engine.clockOf(this).stepDur;
       for (let r = 0; r < ratchet; r++) this.blip(t + (r * step) / ratchet, f * (r ? 1.5 : 1), r ? 0.55 : 0.9);
@@ -352,19 +351,16 @@
     }
     blip(t, f, vel) {
       const ctx = this.engine.ctx;
-      const o = ctx.createOscillator(); o.type = 'square';
+      // a small glass pluck: triangle + a bell partial
+      const o = ctx.createOscillator(); o.type = 'triangle';
       o.frequency.setValueAtTime(f, t);
-      o.frequency.setValueAtTime(f * 0.75, t + 0.014);
-      const g = ctx.createGain();
-      env(g, t, 0.26 * vel, 0.002, 0.045);
-      o.connect(g).connect(this.crush);
-      o.start(t); o.stop(t + 0.08);
-      const nz = ctx.createBufferSource(); nz.buffer = this.engine.noise;
-      nz.playbackRate.value = 0.3;
-      const ng = ctx.createGain();
-      env(ng, t, 0.08 * vel, 0.001, 0.02);
-      nz.connect(ng).connect(this.crush);
-      nz.start(t, Math.random()); nz.stop(t + 0.03);
+      const o2 = ctx.createOscillator(); o2.type = 'sine';
+      o2.frequency.setValueAtTime(f * 2.01, t);
+      const g = ctx.createGain(), g2 = ctx.createGain();
+      env(g, t, 0.2 * vel, 0.004, 0.12);
+      env(g2, t, 0.06 * vel, 0.003, 0.08);
+      o.connect(g).connect(this.crush); o2.connect(g2).connect(this.crush);
+      o.start(t); o.stop(t + 0.25); o2.start(t); o2.stop(t + 0.2);
     }
   }
 
@@ -391,24 +387,24 @@
       const f = c.note(this.cell.degs[idx], 3 + octOf(this.place.y01));
       if (k === 'click') {
         const n = ctx.createBufferSource(); n.buffer = this.engine.noise;
-        const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 7000;
-        const g = ctx.createGain(); env(g, t, 0.3, 0.001, 0.012);
+        const hp = ctx.createBiquadFilter(); hp.type = 'bandpass'; hp.frequency.value = 4200; hp.Q.value = 0.8;
+        const g = ctx.createGain(); env(g, t, 0.09, 0.002, 0.018);
         n.connect(hp).connect(g).connect(this.gate);
         n.start(t, Math.random()); n.stop(t + 0.02);
       } else {
         const o = ctx.createOscillator(), g = ctx.createGain();
-        if (k === 'blip') { o.type = 'sine'; o.frequency.setValueAtTime(f, t); env(g, t, 0.24, 0.003, 0.09); o.connect(g).connect(this.gate); }
+        if (k === 'blip') { o.type = 'sine'; o.frequency.setValueAtTime(f, t); env(g, t, 0.22, 0.005, 0.16); o.connect(g).connect(this.gate); }
         else if (k === 'beep') {
-          o.type = 'square'; o.frequency.setValueAtTime(f, t);
-          const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f * 2; bp.Q.value = 2;
-          env(g, t, 0.16, 0.004, 0.1); o.connect(bp).connect(g).connect(this.gate);
+          o.type = 'triangle'; o.frequency.setValueAtTime(f, t);
+          const bp = ctx.createBiquadFilter(); bp.type = 'lowpass'; bp.frequency.value = f * 3; bp.Q.value = 0.5;
+          env(g, t, 0.2, 0.006, 0.14); o.connect(bp).connect(g).connect(this.gate);
         } else {
           o.type = 'sine';
-          o.frequency.setValueAtTime(f * 0.5, t);
-          o.frequency.exponentialRampToValueAtTime(f, t + 0.05);
-          env(g, t, 0.2, 0.004, 0.08); o.connect(g).connect(this.gate);
+          o.frequency.setValueAtTime(f * 0.94, t);
+          o.frequency.exponentialRampToValueAtTime(f, t + 0.06);
+          env(g, t, 0.18, 0.006, 0.14); o.connect(g).connect(this.gate);
         }
-        o.start(t); o.stop(t + 0.16);
+        o.start(t); o.stop(t + 0.3);
       }
       this.engine.visual(t, this.id, 0, 0.8);
     }
@@ -418,8 +414,8 @@
   const TRAITS = {
     circle: { wave: 'sine', mul: 2, rhythmic: false },
     oval: { wave: 'triangle', mul: 4, rhythmic: false },
-    square: { wave: 'square', mul: 2, rhythmic: true },
-    rect: { wave: 'sawtooth', mul: 4, rhythmic: true },
+    square: { wave: 'triangle', mul: 2, rhythmic: true },
+    rect: { wave: 'triangle', mul: 4, rhythmic: true },
     capsule: { wave: 'triangle', mul: 3, rhythmic: false },
     fx: { wave: 'sine', mul: 8, rhythmic: true }
   };
@@ -444,11 +440,11 @@
       this.sumMix = ctx.createGain(); this.sumMix.gain.value = 0.2;
       this.ring.connect(this.ringMix);
       this.oscA.connect(this.sumMix); this.oscB.connect(this.sumMix);
-      this.lp = ctx.createBiquadFilter(); this.lp.type = 'lowpass'; this.lp.frequency.value = 2200; this.lp.Q.value = 0.7;
+      this.lp = ctx.createBiquadFilter(); this.lp.type = 'lowpass'; this.lp.frequency.value = 1500; this.lp.Q.value = 0.5;
       this.ringMix.connect(this.lp); this.sumMix.connect(this.lp);
       const rhythmic = a.rhythmic || b.rhythmic;
       this.trem = ctx.createGain(); this.trem.gain.value = rhythmic ? 0.55 : 0.85;
-      this.lfo = ctx.createOscillator(); this.lfo.type = rhythmic ? 'square' : 'sine';
+      this.lfo = ctx.createOscillator(); this.lfo.type = 'sine';
       this.lfo.frequency.value = rhythmic ? (engine.clocks.he.bpm / 60) * 2 : 0.2;
       this.lfoSmooth = ctx.createBiquadFilter(); this.lfoSmooth.type = 'lowpass'; this.lfoSmooth.frequency.value = 35;
       this.lfoAmt = ctx.createGain(); this.lfoAmt.gain.value = rhythmic ? 0.42 : 0.12;
@@ -477,7 +473,7 @@
       const ctx = this.engine.ctx;
       glide(this.level.gain, l * 0.075, ctx, 0.18);
       glide(this.oscB.frequency, this.f * ratioAt(l), ctx, 0.12);
-      glide(this.ringMix.gain, 1 - 0.88 * l, ctx, 0.15);
+      glide(this.ringMix.gain, 0.45 * (1 - l), ctx, 0.15);
       glide(this.sumMix.gain, 0.15 + 0.45 * l, ctx, 0.15);
     }
     dispose() {
@@ -522,10 +518,10 @@
 
       this.bus = ctx.createGain();
       this.mix = ctx.createGain();
-      this.air = ctx.createBiquadFilter(); this.air.type = 'lowpass'; this.air.frequency.value = 5000; this.air.Q.value = 0.5;
+      this.air = ctx.createBiquadFilter(); this.air.type = 'lowpass'; this.air.frequency.value = 4200; this.air.Q.value = 0.4;
       this.sat = ctx.createWaveShaper();
       const sc = new Float32Array(2048);
-      for (let i = 0; i < 2048; i++) { const x = (i / 2047) * 2 - 1; sc[i] = Math.tanh(1.4 * x) / Math.tanh(1.4); }
+      for (let i = 0; i < 2048; i++) { const x = (i / 2047) * 2 - 1; sc[i] = Math.tanh(1.05 * x) / Math.tanh(1.05); }
       this.sat.curve = sc; this.sat.oversample = '2x';
       this.scene = ctx.createGain(); this.scene.gain.value = 0;
       this.master = ctx.createGain(); this.master.gain.value = this.userVolume;
@@ -542,13 +538,13 @@
       this.convolver = ctx.createConvolver();
       this.convolver.buffer = this._impulse(3.4);
       this.revPre = ctx.createBiquadFilter(); this.revPre.type = 'highpass'; this.revPre.frequency.value = 180;
-      this.revOut = ctx.createGain(); this.revOut.gain.value = 0.55;
+      this.revOut = ctx.createGain(); this.revOut.gain.value = 0.68;
       this.revIn.connect(this.revPre).connect(this.convolver).connect(this.revOut).connect(this.mix);
 
       this.delIn = ctx.createGain();
       this.dL = ctx.createDelay(3); this.dR = ctx.createDelay(3);
       this.fb = ctx.createGain(); this.fb.gain.value = 0.38;
-      this.fbLp = ctx.createBiquadFilter(); this.fbLp.type = 'lowpass'; this.fbLp.frequency.value = 3200;
+      this.fbLp = ctx.createBiquadFilter(); this.fbLp.type = 'lowpass'; this.fbLp.frequency.value = 2400;
       const pL = ctx.createStereoPanner(), pR = ctx.createStereoPanner();
       pL.pan.value = -0.7; pR.pan.value = 0.7;
       this.delOut = ctx.createGain(); this.delOut.gain.value = 0.42;
@@ -720,7 +716,7 @@
       const f = c.chord.note(degs[i], 3);
       const ctx = this.ctx;
       const o = ctx.createOscillator(), g = ctx.createGain();
-      o.type = call ? 'triangle' : 'sine';
+      o.type = 'sine';
       o.frequency.setValueAtTime(f, t);
       if (!call) {                                       // her answer sings with a slow vibrato
         const vib = ctx.createOscillator(), va = ctx.createGain();
@@ -728,21 +724,21 @@
         vib.connect(va).connect(o.frequency); vib.start(t); vib.stop(t + 0.9);
       }
       g.gain.setValueAtTime(0, t);
-      g.gain.linearRampToValueAtTime(call ? 0.12 : 0.15, t + 0.03);
-      g.gain.setTargetAtTime(0, t + 0.12, i === 3 ? 0.35 : 0.16);
+      g.gain.linearRampToValueAtTime(call ? 0.13 : 0.15, t + 0.05);
+      g.gain.setTargetAtTime(0, t + 0.14, i === 3 ? 0.45 : 0.22);
       o.connect(g).connect(this.dialogOut);
       o.start(t); o.stop(t + 1.6);
     }
     _applyEnergy(t) {
       const ctx = this.ctx, e = this.energy;
-      glide(this.air.frequency, 4200 + 13000 * e * e, ctx, 1.2, t);
-      glide(this.revOut.gain, 0.5 + 0.3 * e, ctx, 1.5, t);
+      glide(this.air.frequency, 4200 + 4500 * e * e, ctx, 1.2, t);
+      glide(this.revOut.gain, 0.62 + 0.2 * e, ctx, 1.5, t);
       glide(this.fb.gain, 0.32 + 0.16 * e, ctx, 1.5, t);
       if (this.voices.circle) this.voices.circle.setEnergy(e);
     }
     duck(t, vel) {
-      if (this.voices.circle) this.voices.circle.duck(t, 0.55 * vel);
-      if (this.voices.oval) this.voices.oval.duck(t, 0.4 * vel);
+      if (this.voices.circle) this.voices.circle.duck(t, 0.35 * vel);
+      if (this.voices.oval) this.voices.oval.duck(t, 0.25 * vel);
     }
 
     /* ---------- the story ---------- */
