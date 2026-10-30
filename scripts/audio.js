@@ -838,32 +838,73 @@
     worldName() { return this.clocks.he.pending ? this.clocks.he.pending.name : this.clocks.he.world.name; }
 
     /* a birth: two tones rub, find the fifth, and the child answers with three notes */
+    /* a birth is a re-assembly: fragments scatter and converge onto the chord,
+       two misaligned layers slide into one (the beating slows to stillness),
+       then the new form clicks into place and its chord sounds all at once */
     birth() {
       if (!this.ctx || !this.scenePlaying) return 0;
       const ctx = this.ctx, t = this.nextBeat(), c = this.chord;
-      const f = c.root * 4;
-      const a = ctx.createOscillator(), b = ctx.createOscillator(), g = ctx.createGain();
-      a.type = 'sine'; b.type = 'triangle';
-      a.frequency.setValueAtTime(f, t);
-      b.frequency.setValueAtTime(f * 16 / 15, t);
-      b.frequency.exponentialRampToValueAtTime(f * 3 / 2, t + 1.1);
-      g.gain.setValueAtTime(0, t);
-      g.gain.linearRampToValueAtTime(0.09, t + 0.25);
-      g.gain.setTargetAtTime(0, t + 1.3, 0.5);
-      a.connect(g); b.connect(g); g.connect(this.bus); g.connect(this.revIn);
-      a.start(t); b.start(t); a.stop(t + 4); b.stop(t + 4);
-      [0, 2, 4].forEach((d, i) => {
-        const tt = t + 1.15 + i * 0.12;
-        const o = ctx.createOscillator(), gg = ctx.createGain();
-        o.type = 'sine'; o.frequency.value = c.note(d, 4);
-        gg.gain.setValueAtTime(0, tt);
-        gg.gain.linearRampToValueAtTime(0.08, tt + 0.01);
-        gg.gain.setTargetAtTime(0, tt + 0.05, 0.45);
-        o.connect(gg); gg.connect(this.bus); gg.connect(this.revIn);
-        o.start(tt); o.stop(tt + 2.5);
+      const LOCK = 1.15;
+      const out = ctx.createGain(); out.gain.value = 0.9;
+      out.connect(this.bus);
+      const rs = ctx.createGain(); rs.gain.value = 0.45; out.connect(rs).connect(this.revIn);
+      const targets = [c.note(0, 4), c.note(2, 4), c.note(4, 4), c.note(0, 5)];
+
+      // 1 · fragments: short filtered blips, scattered in pitch and space, accelerating and converging
+      const N = 14;
+      let tt = t;
+      for (let i = 0; i < N; i++) {
+        const k = i / (N - 1);                                   // 0 → 1: scattered → assembled
+        const target = targets[i % targets.length];
+        const wild = target * Math.pow(2, (Math.random() * 2 - 1) * 1.1);
+        const f = Math.exp(Math.log(wild) * (1 - k * k) + Math.log(target) * k * k);
+        const o = ctx.createOscillator(); o.type = 'triangle'; o.frequency.value = f;
+        const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f * 1.5; bp.Q.value = 1.2;
+        const g = ctx.createGain(), pan = ctx.createStereoPanner();
+        pan.pan.value = (Math.random() * 2 - 1) * 0.9 * (1 - k);   // the pieces gather into the centre
+        env(g, tt, 0.07 + 0.05 * k, 0.002, 0.035 + 0.04 * k);
+        o.connect(bp).connect(g).connect(pan).connect(out);
+        o.start(tt); o.stop(tt + 0.25);
+        tt += 0.13 * (1 - k * 0.75);                             // gaps shrink: the assembly speeds up
+        if (tt > t + LOCK - 0.04) break;
+      }
+
+      // 2 · alignment: two copies of the root, detuned apart, slide together; a formant reshapes them
+      const f0 = c.note(0, 3);
+      const morph = ctx.createBiquadFilter(); morph.type = 'bandpass'; morph.Q.value = 3;
+      morph.frequency.setValueAtTime(f0 * 6, t);
+      morph.frequency.exponentialRampToValueAtTime(f0 * 1.5, t + LOCK * 0.55);
+      morph.frequency.exponentialRampToValueAtTime(f0 * 4, t + LOCK);
+      const mg = ctx.createGain();
+      mg.gain.setValueAtTime(0, t);
+      mg.gain.linearRampToValueAtTime(0.11, t + 0.35);
+      mg.gain.setValueAtTime(0.11, t + LOCK - 0.05);
+      mg.gain.linearRampToValueAtTime(0, t + LOCK + 0.02);
+      morph.connect(mg).connect(out);
+      [-1, 1].forEach((sgn) => {
+        const o = ctx.createOscillator(); o.type = 'sawtooth';
+        o.frequency.setValueAtTime(f0, t);
+        o.detune.setValueAtTime(sgn * 70, t);
+        o.detune.exponentialRampToValueAtTime(sgn * 0.5, t + LOCK);
+        o.connect(morph); o.start(t); o.stop(t + LOCK + 0.1);
       });
-      this.visual(t + 1.15, 'birth', 0, 1);
-      return t + 1.15;
+
+      // 3 · lock: a soft click, then the chord as one whole
+      const L = t + LOCK;
+      const n = ctx.createBufferSource(); n.buffer = this.noise;
+      const nb = ctx.createBiquadFilter(); nb.type = 'bandpass'; nb.frequency.value = 2400; nb.Q.value = 4;
+      const ng = ctx.createGain(); env(ng, L, 0.2, 0.001, 0.012);
+      n.connect(nb).connect(ng).connect(out); n.start(L, Math.random()); n.stop(L + 0.04);
+      targets.slice(0, 3).forEach((f, i) => {
+        const o = ctx.createOscillator(); o.type = i ? 'sine' : 'triangle'; o.frequency.value = f;
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0, L);
+        g.gain.linearRampToValueAtTime(0.065, L + 0.008);
+        g.gain.setTargetAtTime(0, L + 0.06, 0.55);
+        o.connect(g).connect(out); o.start(L); o.stop(L + 3);
+      });
+      this.visual(L, 'birth', 0, 1);
+      return L;
     }
 
     /* the closing chord in D major (just), long tail into the reverb */
