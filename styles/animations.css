@@ -72,9 +72,17 @@
   to   { filter: brightness(1.12) saturate(1.15); }
 }
 
-/* the finale: the two who are left breathe together */
-.body.is-final .main {
+/* the finale: the two who are left breathe together
+   (the circle softly changes its outline, the square keeps its corners and only glows) */
+.body--circle.is-final .main {
   animation: soft-breathe 4.2s ease-in-out infinite;
+}
+.body--square.is-final .main {
+  animation: final-glow 4.2s ease-in-out infinite;
+}
+@keyframes final-glow {
+  0%, 100% { filter: none; }
+  50%      { filter: brightness(1.08) saturate(1.1); }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -82,6 +90,7 @@
   .corner.is-calling,
   .body--fx.is-on .main,
   .body--circle.is-on .main,
-  .body--oval.is-on .main { animation: none; }
+  .body--oval.is-on .main,
+  .body.is-final .main { animation: none; }
   .ring, .ghost, .capsule-dot, .capsule-back { transition-duration: .01s; }
 }
