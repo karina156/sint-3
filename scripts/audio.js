@@ -2,21 +2,17 @@
    audio.js — Web Audio engine for the story
    «все формы происходят от двух»
 
-   Two worlds play at first, each on its own clock:
-     he  (square) — E♭ Lydian, 123 BPM — «он одинок»
-     she (circle) — B whole-tone, 133 BPM — «она потеряна»
-   When they start to look for each other the worlds unite on one clock
-   and travel through the scenes:
-     search — G harmonic minor, 85 — «поиск той»
-     meet   — B whole-tone, 85, a call and an answer — «где ты» / «я тут, привет»
-     light  — D major, 95 — «свет ваш»: children are born
-     final  — D major, a last cadence — «снова двое»
-   (worlds = the author's saved choices in the harmony lab)
-
-   Shared for all scenes: Euclidean rhythms, a motif that develops, interlocking
-   cells, just intonation where the interval is pure, reverb + ping-pong delay,
-   sidechain from the square, soft saturation, quantized entries, hybrids
-   that glide from friction (16:15) to a fifth (3:2).
+   One key family, one pulse. Everything lives around D and its relative
+   B minor, on a single shared grid, so any combination of forms is consonant:
+     he  (square) — D Lydian (I – II), «он одинок»: bright, open, unresolved
+     she (circle) — B Dorian (i – IV – i – VII), «она потеряна»: the same notes,
+                    another centre — together they always agree
+     search — B harmonic minor, the leading tone pulls — «поиск той»
+     meet   — D Lydian, slower, a call and an answer — «где ты» / «я тут, привет»
+     light  — D major (I – vi – IV – V) — «свет ваш»: children are born
+     final  — D major, the last cadence — «снова двое»
+   Under everything an atmosphere: a low drone on the chord root and a soft wind.
+   Overlapping forms bloom into chord tones (third, fifth, octave) — never friction.
    ========================================================= */
 (function () {
   'use strict';
@@ -39,15 +35,14 @@
     whole: [0, 2, 4, 6, 8, 10]
   };
   const WORLDS = {
-    he:     { name: 'he',     mode: 'lydian',   tonic: 3,  bpm: 123, prog: [0, 3] },
-    she:    { name: 'she',    mode: 'whole',    tonic: 11, bpm: 133, prog: [0, 5, 3, 4] },
-    search: { name: 'search', mode: 'harmonic', tonic: 7,  bpm: 85,  prog: [0, 5, 3, 4] },
-    meet:   { name: 'meet',   mode: 'whole',    tonic: 11, bpm: 85,  prog: [0, 3] },
-    light:  { name: 'light',  mode: 'ionian',   tonic: 2,  bpm: 95,  prog: [0, 3, 0, 6] },
-    final:  { name: 'final',  mode: 'ionian',   tonic: 2,  bpm: 95,  prog: [0] }
+    he:     { name: 'he',     mode: 'lydian',   tonic: 2,  bpm: 90, prog: [0, 1] },
+    she:    { name: 'she',    mode: 'dorian',   tonic: 11, bpm: 90, prog: [0, 3, 0, 6] },
+    search: { name: 'search', mode: 'harmonic', tonic: 11, bpm: 84, prog: [0, 5, 3, 4] },
+    meet:   { name: 'meet',   mode: 'lydian',   tonic: 2,  bpm: 80, prog: [0, 1] },
+    light:  { name: 'light',  mode: 'ionian',   tonic: 2,  bpm: 92, prog: [0, 5, 3, 4] },
+    final:  { name: 'final',  mode: 'ionian',   tonic: 2,  bpm: 92, prog: [0] }
   };
-  /* just intonation where the interval is pure, equal temperament otherwise
-     (the whole-tone scale has no pure fifth and must keep its colour) */
+  /* just intonation where the interval is pure, equal temperament otherwise */
   const JI = { 0: 1, 3: 6 / 5, 4: 5 / 4, 5: 4 / 3, 7: 3 / 2, 8: 8 / 5, 9: 5 / 3, 12: 2, 14: 9 / 4, 15: 12 / 5, 16: 5 / 2 };
   const ratio = (semi) => JI[semi] || Math.pow(2, semi / 12);
 
@@ -449,8 +444,8 @@
         n.connect(bp).connect(out); n.start(t, Math.random()); n.stop(t + 0.05);
       } else if (k === 'blip') {                             // a water drop: a fast upward bend
         const o = ctx.createOscillator(); o.type = 'sine';
-        o.frequency.setValueAtTime(f * 0.55, t);
-        o.frequency.exponentialRampToValueAtTime(f * 1.5, t + 0.045);
+        o.frequency.setValueAtTime(f * 0.5, t);                     // rises an octave and lands on the note
+        o.frequency.exponentialRampToValueAtTime(f, t + 0.045);
         env(out, t, 0.24, 0.003, 0.07);
         o.connect(out); o.start(t); o.stop(t + 0.2);
       } else if (k === 'beep') {                             // an ocarina: round tone, breath and vibrato
@@ -471,10 +466,10 @@
         n.start(t, Math.random()); n.stop(t + 0.6);
       } else {                                               // a bird: two quick rising chirps
         const o = ctx.createOscillator(); o.type = 'sine';
-        o.frequency.setValueAtTime(f * 1.6, t);
-        o.frequency.exponentialRampToValueAtTime(f * 3, t + 0.04);
-        o.frequency.setValueAtTime(f * 1.9, t + 0.06);
-        o.frequency.exponentialRampToValueAtTime(f * 3.4, t + 0.1);
+        o.frequency.setValueAtTime(f * 1.5, t);                    // both chirps land on chord tones
+        o.frequency.exponentialRampToValueAtTime(f * 2, t + 0.04);
+        o.frequency.setValueAtTime(f * 2, t + 0.06);
+        o.frequency.exponentialRampToValueAtTime(f * 3, t + 0.1);
         out.gain.setValueAtTime(0, t);
         out.gain.linearRampToValueAtTime(0.1, t + 0.008);
         out.gain.linearRampToValueAtTime(0.01, t + 0.045);
@@ -486,20 +481,11 @@
     }
   }
 
-  /* -------- hybrid: friction on contact → consonance when merged -------- */
+  /* -------- overlap: two forms bloom into the chord (third → fifth → octave) -------- */
   const TRAITS = {
-    circle: { wave: 'sine', mul: 2, rhythmic: false },
-    oval: { wave: 'triangle', mul: 4, rhythmic: false },
-    square: { wave: 'triangle', mul: 2, rhythmic: true },
-    rect: { wave: 'triangle', mul: 4, rhythmic: true },
-    capsule: { wave: 'triangle', mul: 3, rhythmic: false },
-    fx: { wave: 'sine', mul: 8, rhythmic: true }
+    circle: { mul: 2 }, oval: { mul: 4 }, square: { mul: 2 },
+    rect: { mul: 4 }, capsule: { mul: 2 }, fx: { mul: 4 }
   };
-  const PATH = [16 / 15, 9 / 8, 4 / 3, 3 / 2];
-  function ratioAt(l) {
-    const x = clamp(l, 0, 1) * (PATH.length - 1), i = Math.min(PATH.length - 2, Math.floor(x)), f = x - i;
-    return Math.exp(Math.log(PATH[i]) * (1 - f) + Math.log(PATH[i + 1]) * f);
-  }
   class Hybrid {
     constructor(engine, key, typeA, typeB) {
       this.engine = engine;
@@ -508,54 +494,59 @@
       const a = TRAITS[typeA] || TRAITS.fx, b = TRAITS[typeB] || TRAITS.fx;
       this.mul = Math.min(a.mul, b.mul);
       this.lvl = 0;
-      this.oscA = ctx.createOscillator(); this.oscA.type = a.wave;
-      this.oscB = ctx.createOscillator(); this.oscB.type = b.wave;
-      this.ring = ctx.createGain(); this.ring.gain.value = 0;
-      this.oscA.connect(this.ring); this.oscB.connect(this.ring.gain);
-      this.ringMix = ctx.createGain(); this.ringMix.gain.value = 1;
-      this.sumMix = ctx.createGain(); this.sumMix.gain.value = 0.2;
-      this.ring.connect(this.ringMix);
-      this.oscA.connect(this.sumMix); this.oscB.connect(this.sumMix);
-      this.lp = ctx.createBiquadFilter(); this.lp.type = 'lowpass'; this.lp.frequency.value = 1500; this.lp.Q.value = 0.5;
-      this.ringMix.connect(this.lp); this.sumMix.connect(this.lp);
-      const rhythmic = a.rhythmic || b.rhythmic;
-      this.trem = ctx.createGain(); this.trem.gain.value = rhythmic ? 0.55 : 0.85;
-      this.lfo = ctx.createOscillator(); this.lfo.type = 'sine';
-      this.lfo.frequency.value = rhythmic ? (engine.clocks.he.bpm / 60) * 2 : 0.2;
-      this.lfoSmooth = ctx.createBiquadFilter(); this.lfoSmooth.type = 'lowpass'; this.lfoSmooth.frequency.value = 35;
-      this.lfoAmt = ctx.createGain(); this.lfoAmt.gain.value = rhythmic ? 0.42 : 0.12;
-      this.lfo.connect(this.lfoSmooth).connect(this.lfoAmt).connect(this.trem.gain);
-      this.level = ctx.createGain(); this.level.gain.value = 0;
-      this.lp.connect(this.trem).connect(this.level);
-      this.level.connect(engine.bus);
-      this.send = ctx.createGain(); this.send.gain.value = 0.5;
-      this.level.connect(this.send).connect(engine.revIn);
       this.target = 0;
       this.silentSince = 0;
+      this.out = ctx.createGain(); this.out.gain.value = 0;
+      const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2400; lp.Q.value = 0.4;
+      this.out.connect(lp);
+      lp.connect(engine.bus);
+      this.send = ctx.createGain(); this.send.gain.value = 0.9;
+      lp.connect(this.send).connect(engine.revIn);
+      // a slow swell, like a held breath
+      this.lfo = ctx.createOscillator(); this.lfo.frequency.value = 0.18;
+      this.lfoAmt = ctx.createGain(); this.lfoAmt.gain.value = 0.25;
+      this.swell = ctx.createGain(); this.swell.gain.value = 0.75;
+      this.lfo.connect(this.lfoAmt).connect(this.swell.gain);
+      this.swell.connect(this.out);
+      // three chord tones, each a pair of slightly detuned sines (a soft chorus)
+      this.tones = ['third', 'fifth', 'octave'].map((name, i) => {
+        const g = ctx.createGain(); g.gain.value = 0;
+        const pan = ctx.createStereoPanner(); pan.pan.value = [-0.4, 0.4, 0][i];
+        g.connect(pan).connect(this.swell);
+        const oscs = [-4, 4].map((dt) => {
+          const o = ctx.createOscillator(); o.type = i === 2 ? 'sine' : 'triangle'; o.detune.value = dt;
+          o.connect(g); return o;
+        });
+        return { name, g, oscs };
+      });
       this.chord(engine.chord, ctx.currentTime);
       const t = ctx.currentTime + 0.01;
-      this.oscA.start(t); this.oscB.start(t); this.lfo.start(t);
+      this.lfo.start(t);
+      this.tones.forEach((x) => x.oscs.forEach((o) => o.start(t)));
     }
     chord(c, t) {
       const ctx = this.engine.ctx, f = c.root * this.mul;
-      this.f = f;
-      glide(this.oscA.frequency, f, ctx, 0.2, t);
-      glide(this.oscB.frequency, f * ratioAt(this.lvl), ctx, 0.2, t);
+      const fr = { third: f * ratio(c.third), fifth: f * ratio(c.fifth), octave: f * 2 };
+      this.tones.forEach((x) => x.oscs.forEach((o) => glide(o.frequency, fr[x.name], ctx, 0.25, t)));
     }
     setLevel(l) {
       if (Math.abs(l - this.target) < 0.004) return;
       this.target = l;
       this.lvl = l;
       const ctx = this.engine.ctx;
-      glide(this.level.gain, l * 0.075, ctx, 0.18);
-      glide(this.oscB.frequency, this.f * ratioAt(l), ctx, 0.12);
-      glide(this.ringMix.gain, 0.45 * (1 - l), ctx, 0.15);
-      glide(this.sumMix.gain, 0.15 + 0.45 * l, ctx, 0.15);
+      // a touch brings the third, a deeper overlap the fifth, a union the octave
+      const s01 = (x, a, b) => clamp((x - a) / (b - a), 0, 1);
+      glide(this.tones[0].g.gain, s01(l, 0, 0.3), ctx, 0.25);
+      glide(this.tones[1].g.gain, s01(l, 0.2, 0.6) * 0.8, ctx, 0.3);
+      glide(this.tones[2].g.gain, s01(l, 0.5, 1) * 0.5, ctx, 0.35);
+      glide(this.out.gain, Math.sqrt(l) * 0.05, ctx, 0.3);
     }
     dispose() {
-      const t = this.engine.ctx.currentTime + 0.05;
-      try { this.oscA.stop(t); this.oscB.stop(t); this.lfo.stop(t); } catch (e) {}
-      setTimeout(() => { try { this.level.disconnect(); } catch (e) {} }, 200);
+      const ctx = this.engine.ctx;
+      glide(this.out.gain, 0, ctx, 0.3);
+      const t = ctx.currentTime + 1.5;
+      try { this.lfo.stop(t); this.tones.forEach((x) => x.oscs.forEach((o) => o.stop(t))); } catch (e) {}
+      setTimeout(() => { try { this.out.disconnect(); } catch (e) {} }, 1700);
     }
   }
 
@@ -612,7 +603,7 @@
 
       this.revIn = ctx.createGain();
       this.convolver = ctx.createConvolver();
-      this.convolver.buffer = this._impulse(3.4);
+      this.convolver.buffer = this._impulse(4.6);
       this.revPre = ctx.createBiquadFilter(); this.revPre.type = 'highpass'; this.revPre.frequency.value = 180;
       this.revOut = ctx.createGain(); this.revOut.gain.value = 0.68;
       this.revIn.connect(this.revPre).connect(this.convolver).connect(this.revOut).connect(this.mix);
@@ -630,6 +621,30 @@
       this.delOut.connect(this.mix);
       this.delOut.connect(this.revIn);
       this._delayTime();
+
+      // atmosphere: a low drone on the chord (root + fifth) and a soft moving wind
+      this.atmo = ctx.createGain(); this.atmo.gain.value = 0;
+      const atmoLp = ctx.createBiquadFilter(); atmoLp.type = 'lowpass'; atmoLp.frequency.value = 900; atmoLp.Q.value = 0.3;
+      this.atmo.connect(atmoLp).connect(this.bus);
+      const atmoRev = ctx.createGain(); atmoRev.gain.value = 0.6; atmoLp.connect(atmoRev).connect(this.revIn);
+      this.drone = [[1, 0.5, -3], [1.5, 0.28, 3], [2, 0.16, -5]].map(([m, g0, dt]) => {
+        const o = ctx.createOscillator(); o.type = 'sine'; o.detune.value = dt;
+        const g = ctx.createGain(); g.gain.value = g0;
+        o.connect(g).connect(this.atmo); o.start();
+        return { o, m };
+      });
+      const wind = ctx.createBufferSource(); wind.loop = true;
+      wind.buffer = this.noise || (() => {
+        const len = ctx.sampleRate, b = ctx.createBuffer(1, len, ctx.sampleRate), d = b.getChannelData(0);
+        for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+        return b;
+      })();
+      this.windF = ctx.createBiquadFilter(); this.windF.type = 'bandpass'; this.windF.frequency.value = 600; this.windF.Q.value = 0.9;
+      const wg = ctx.createGain(); wg.gain.value = 0.05;
+      const wl = ctx.createOscillator(); wl.frequency.value = 0.05;
+      const wla = ctx.createGain(); wla.gain.value = 350;
+      wl.connect(wla).connect(this.windF.frequency); wl.start();
+      wind.connect(this.windF).connect(wg).connect(this.atmo); wind.start();
 
       // the dialogue of the meeting: his call and her answer
       this.dialogOut = ctx.createGain(); this.dialogOut.gain.value = 0.9;
@@ -742,6 +757,10 @@
     _tick() {
       const ctx = this.ctx;
       if (!ctx || !this.running) return;
+      if (!this.united) {                                 // her clock always breathes with his: one grid
+        const he = this.clocks.he, she = this.clocks.she;
+        she.nextTime = he.nextTime; she.step = he.step; she.bpm = he.bpm;
+      }
       for (const c of this.activeClocks()) {
         if (c.nextTime < ctx.currentTime - 0.2) c.nextTime = ctx.currentTime + 0.02;
         while (c.nextTime < ctx.currentTime + LOOKAHEAD) {
@@ -768,13 +787,17 @@
         const chord = chordOf(c.world, p[Math.floor((s - c.progStart) / 32) % p.length]);
         c.chord = chord;
         for (const v of this.voicesOn(c)) v.chord(chord, t);
-        if (c.id === 'he') this.hybrids.forEach((h) => h.chord(chord, t));
+        if (c.id === 'he') {
+          this.hybrids.forEach((h) => h.chord(chord, t));
+          if (this.drone) this.drone.forEach((d) => glide(d.o.frequency, chord.root / 2 * d.m, this.ctx, 0.8, t));
+        }
       }
       const vs = this.voicesOn(c);
       if (c.id === 'he' && s % 16 === 0) {
         let n = 0;
         for (const id in this.voices) if (this.voices[id].active(t)) n++;
         this.energy = clamp(this.energy + (n >= 2 ? 0.05 + 0.01 * (n - 2) : -0.08), 0, 1);
+        if (this.atmo) glide(this.atmo.gain, n ? 0.05 + 0.012 * Math.min(n, 5) : 0, this.ctx, 1.6, t);
         this._applyEnergy(t);
       }
       for (const v of vs) v.step(s, t, c.chord);
@@ -838,8 +861,8 @@
     worldName() { return this.clocks.he.pending ? this.clocks.he.pending.name : this.clocks.he.world.name; }
 
     /* a birth: two tones rub, find the fifth, and the child answers with three notes */
-    /* a birth is a machine re-assembly:
-       1 a data stream — stepped, lightly crushed pulses scanning across the stereo field, accelerating;
+    /* a birth is a machine re-assembly (always the same gesture, always in the chord):
+       1 a data stream — an ordered arpeggio of chord tones sweeping across the stereo field, accelerating;
        2 a servo — a metallic FM tone that climbs in quantized steps while its flutter speeds up and locks;
        3 a buffer stutter right before the lock;
        4 lock — a digital click, the chord as one block and a two-tone "confirm" */
@@ -850,20 +873,21 @@
       const out = ctx.createGain(); out.gain.value = 0.42;
       out.connect(this.bus);
       const rs = ctx.createGain(); rs.gain.value = 0.3; out.connect(rs).connect(this.revIn);
-      const crush = ctx.createWaveShaper(); crush.curve = this.crushCurve;
-      const crushLp = ctx.createBiquadFilter(); crushLp.type = 'lowpass'; crushLp.frequency.value = 4200; crushLp.Q.value = 0.6;
-      crush.connect(crushLp).connect(out);
+      const crush = ctx.createBiquadFilter(); crush.type = 'lowpass'; crush.frequency.value = 3400; crush.Q.value = 0.5;
+      crush.connect(out);
       const tones = [0, 2, 4, 7].map((d) => c.note(d, 4));
 
-      // 1 · data stream: square pulses, sample-and-hold pitches snapping to chord tones, ping-pong
+      // 1 · data stream: an ordered climb through the chord tones, from the left to the centre
+      const ladder = [0, 1, 2, 3, 1, 2, 3, 4, 2, 3, 4, 5, 3, 4, 5, 6];
       let tt = t, i = 0;
-      while (tt < t + 0.78) {
+      while (tt < t + 0.78 && i < ladder.length) {
         const k = (tt - t) / 0.78;
-        const f = tones[(i * 3 + (Math.random() * 2 | 0)) % tones.length] * (Math.random() < 0.3 ? 2 : 1);
-        const o = ctx.createOscillator(); o.type = 'square'; o.frequency.value = f;
+        const st = ladder[i];
+        const f = tones[st % 4] * Math.pow(2, Math.floor(st / 4));
+        const o = ctx.createOscillator(); o.type = 'triangle'; o.frequency.value = f;
         const g = ctx.createGain(), pan = ctx.createStereoPanner();
-        pan.pan.value = (i % 2 ? 1 : -1) * (0.85 - 0.6 * k);
-        env(g, tt, 0.05 + 0.04 * k, 0.001, 0.022);
+        pan.pan.value = (i % 2 ? 0.6 : -0.6) * (1 - k);
+        env(g, tt, 0.06 + 0.04 * k, 0.002, 0.05 + 0.04 * k);
         o.connect(g).connect(pan).connect(crush);
         o.start(tt); o.stop(tt + 0.08);
         tt += 0.075 - 0.045 * k;                                   // the stream speeds up
@@ -875,23 +899,23 @@
       const car = ctx.createOscillator(); car.type = 'sine';
       const mod = ctx.createOscillator(); mod.type = 'sine';
       const idx = ctx.createGain();
-      const steps = [0, 2, 4, 5, 7, 9, 11, 12];
+      const steps = [0, 1, 2, 3, 4, 5, 6, 7];                  // up the scale of the current world
       steps.forEach((st, j) => {
         const at = t + 0.25 + j * ((LOCK - 0.35) / steps.length);
-        const fr = f0 * Math.pow(2, st / 12);
+        const fr = c.note(st, 3) / c.note(0, 3) * f0;
         car.frequency.setValueAtTime(fr, at);
-        mod.frequency.setValueAtTime(fr * 1.41, at);             // an inharmonic, metallic ratio
+        mod.frequency.setValueAtTime(fr * 2, at);                // a harmonic ratio: glassy, not clangy
       });
-      car.frequency.setValueAtTime(f0, t); mod.frequency.setValueAtTime(f0 * 1.41, t);
-      idx.gain.setValueAtTime(f0 * 0.4, t);
-      idx.gain.linearRampToValueAtTime(f0 * 2.2, L - 0.1);
+      car.frequency.setValueAtTime(f0, t); mod.frequency.setValueAtTime(f0 * 2, t);
+      idx.gain.setValueAtTime(f0 * 0.2, t);
+      idx.gain.linearRampToValueAtTime(f0 * 0.9, L - 0.1);
       idx.gain.linearRampToValueAtTime(0, L);
       mod.connect(idx).connect(car.frequency);
-      const flutter = ctx.createOscillator(); flutter.type = 'square';
-      flutter.frequency.setValueAtTime(6, t);
-      flutter.frequency.exponentialRampToValueAtTime(48, L - 0.12);
-      const fa = ctx.createGain(); fa.gain.value = 0.5;
-      const sg = ctx.createGain(); sg.gain.value = 0.5;
+      const flutter = ctx.createOscillator(); flutter.type = 'sine';
+      flutter.frequency.setValueAtTime(4, t);
+      flutter.frequency.exponentialRampToValueAtTime(16, L - 0.12);
+      const fa = ctx.createGain(); fa.gain.value = 0.2;
+      const sg = ctx.createGain(); sg.gain.value = 0.8;
       flutter.connect(fa).connect(sg.gain);
       const sv = ctx.createGain();
       sv.gain.setValueAtTime(0, t + 0.2);
@@ -905,16 +929,16 @@
       // 3 · buffer stutter: the last piece of the stream repeats faster and faster
       [0, 0.045, 0.078, 0.1].forEach((d, j) => {
         const at = L - 0.12 + d;
-        const o = ctx.createOscillator(); o.type = 'square'; o.frequency.value = tones[3] * 2;
-        const g = ctx.createGain(); env(g, at, 0.05 + j * 0.012, 0.001, 0.012);
+        const o = ctx.createOscillator(); o.type = 'triangle'; o.frequency.value = tones[0] * 4;
+        const g = ctx.createGain(); env(g, at, 0.04 + j * 0.012, 0.002, 0.02);
         o.connect(g).connect(crush); o.start(at); o.stop(at + 0.04);
       });
 
       // 4 · lock: a one-sample digital click, the chord as a block, then a two-tone confirm
       const imp = ctx.createBuffer(1, 64, ctx.sampleRate); imp.getChannelData(0)[0] = 1; imp.getChannelData(0)[1] = -0.6;
       const ck = ctx.createBufferSource(); ck.buffer = imp;
-      const ckg = ctx.createGain(); ckg.gain.value = 0.5;
-      const ckf = ctx.createBiquadFilter(); ckf.type = 'bandpass'; ckf.frequency.value = 3000; ckf.Q.value = 2;
+      const ckg = ctx.createGain(); ckg.gain.value = 0.3;
+      const ckf = ctx.createBiquadFilter(); ckf.type = 'bandpass'; ckf.frequency.value = 2200; ckf.Q.value = 3;
       ck.connect(ckf).connect(ckg).connect(out); ck.start(L);
       const block = ctx.createBiquadFilter(); block.type = 'lowpass'; block.Q.value = 1.5;
       block.frequency.setValueAtTime(5000, L);
@@ -925,7 +949,7 @@
       bg.gain.setTargetAtTime(0, L + 0.05, 0.4);
       block.connect(bg).connect(out);
       tones.slice(0, 3).forEach((f, j) => {
-        const o = ctx.createOscillator(); o.type = j ? 'triangle' : 'square'; o.frequency.value = f;
+        const o = ctx.createOscillator(); o.type = j ? 'sine' : 'triangle'; o.frequency.value = f;
         o.connect(block); o.start(L); o.stop(L + 2.5);
       });
       [[tones[2] * 2, 0.16], [tones[0] * 4, 0.27]].forEach(([f, d]) => {
@@ -967,7 +991,6 @@
       this.dialog = false;
       const he = this.clocks.he, she = this.clocks.she;
       he.setWorld(WORLDS.he); she.setWorld(WORLDS.she);
-      if (this.running) she.nextTime = Math.max(she.nextTime, this.ctx.currentTime + 0.05);
     }
 
     visual(time, id, layer, vel, data) {
