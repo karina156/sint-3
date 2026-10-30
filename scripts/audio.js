@@ -838,70 +838,103 @@
     worldName() { return this.clocks.he.pending ? this.clocks.he.pending.name : this.clocks.he.world.name; }
 
     /* a birth: two tones rub, find the fifth, and the child answers with three notes */
-    /* a birth is a re-assembly: fragments scatter and converge onto the chord,
-       two misaligned layers slide into one (the beating slows to stillness),
-       then the new form clicks into place and its chord sounds all at once */
+    /* a birth is a machine re-assembly:
+       1 a data stream — stepped, lightly crushed pulses scanning across the stereo field, accelerating;
+       2 a servo — a metallic FM tone that climbs in quantized steps while its flutter speeds up and locks;
+       3 a buffer stutter right before the lock;
+       4 lock — a digital click, the chord as one block and a two-tone "confirm" */
     birth() {
       if (!this.ctx || !this.scenePlaying) return 0;
       const ctx = this.ctx, t = this.nextBeat(), c = this.chord;
-      const LOCK = 1.15;
-      const out = ctx.createGain(); out.gain.value = 0.9;
+      const LOCK = 1.15, L = t + LOCK;
+      const out = ctx.createGain(); out.gain.value = 0.42;
       out.connect(this.bus);
-      const rs = ctx.createGain(); rs.gain.value = 0.45; out.connect(rs).connect(this.revIn);
-      const targets = [c.note(0, 4), c.note(2, 4), c.note(4, 4), c.note(0, 5)];
+      const rs = ctx.createGain(); rs.gain.value = 0.3; out.connect(rs).connect(this.revIn);
+      const crush = ctx.createWaveShaper(); crush.curve = this.crushCurve;
+      const crushLp = ctx.createBiquadFilter(); crushLp.type = 'lowpass'; crushLp.frequency.value = 4200; crushLp.Q.value = 0.6;
+      crush.connect(crushLp).connect(out);
+      const tones = [0, 2, 4, 7].map((d) => c.note(d, 4));
 
-      // 1 · fragments: short filtered blips, scattered in pitch and space, accelerating and converging
-      const N = 14;
-      let tt = t;
-      for (let i = 0; i < N; i++) {
-        const k = i / (N - 1);                                   // 0 → 1: scattered → assembled
-        const target = targets[i % targets.length];
-        const wild = target * Math.pow(2, (Math.random() * 2 - 1) * 1.1);
-        const f = Math.exp(Math.log(wild) * (1 - k * k) + Math.log(target) * k * k);
-        const o = ctx.createOscillator(); o.type = 'triangle'; o.frequency.value = f;
-        const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f * 1.5; bp.Q.value = 1.2;
+      // 1 · data stream: square pulses, sample-and-hold pitches snapping to chord tones, ping-pong
+      let tt = t, i = 0;
+      while (tt < t + 0.78) {
+        const k = (tt - t) / 0.78;
+        const f = tones[(i * 3 + (Math.random() * 2 | 0)) % tones.length] * (Math.random() < 0.3 ? 2 : 1);
+        const o = ctx.createOscillator(); o.type = 'square'; o.frequency.value = f;
         const g = ctx.createGain(), pan = ctx.createStereoPanner();
-        pan.pan.value = (Math.random() * 2 - 1) * 0.9 * (1 - k);   // the pieces gather into the centre
-        env(g, tt, 0.07 + 0.05 * k, 0.002, 0.035 + 0.04 * k);
-        o.connect(bp).connect(g).connect(pan).connect(out);
-        o.start(tt); o.stop(tt + 0.25);
-        tt += 0.13 * (1 - k * 0.75);                             // gaps shrink: the assembly speeds up
-        if (tt > t + LOCK - 0.04) break;
+        pan.pan.value = (i % 2 ? 1 : -1) * (0.85 - 0.6 * k);
+        env(g, tt, 0.05 + 0.04 * k, 0.001, 0.022);
+        o.connect(g).connect(pan).connect(crush);
+        o.start(tt); o.stop(tt + 0.08);
+        tt += 0.075 - 0.045 * k;                                   // the stream speeds up
+        i++;
       }
 
-      // 2 · alignment: two copies of the root, detuned apart, slide together; a formant reshapes them
+      // 2 · servo: FM carrier on the root climbing in steps to the octave; flutter speeds up, then stops
       const f0 = c.note(0, 3);
-      const morph = ctx.createBiquadFilter(); morph.type = 'bandpass'; morph.Q.value = 3;
-      morph.frequency.setValueAtTime(f0 * 6, t);
-      morph.frequency.exponentialRampToValueAtTime(f0 * 1.5, t + LOCK * 0.55);
-      morph.frequency.exponentialRampToValueAtTime(f0 * 4, t + LOCK);
-      const mg = ctx.createGain();
-      mg.gain.setValueAtTime(0, t);
-      mg.gain.linearRampToValueAtTime(0.11, t + 0.35);
-      mg.gain.setValueAtTime(0.11, t + LOCK - 0.05);
-      mg.gain.linearRampToValueAtTime(0, t + LOCK + 0.02);
-      morph.connect(mg).connect(out);
-      [-1, 1].forEach((sgn) => {
-        const o = ctx.createOscillator(); o.type = 'sawtooth';
-        o.frequency.setValueAtTime(f0, t);
-        o.detune.setValueAtTime(sgn * 70, t);
-        o.detune.exponentialRampToValueAtTime(sgn * 0.5, t + LOCK);
-        o.connect(morph); o.start(t); o.stop(t + LOCK + 0.1);
+      const car = ctx.createOscillator(); car.type = 'sine';
+      const mod = ctx.createOscillator(); mod.type = 'sine';
+      const idx = ctx.createGain();
+      const steps = [0, 2, 4, 5, 7, 9, 11, 12];
+      steps.forEach((st, j) => {
+        const at = t + 0.25 + j * ((LOCK - 0.35) / steps.length);
+        const fr = f0 * Math.pow(2, st / 12);
+        car.frequency.setValueAtTime(fr, at);
+        mod.frequency.setValueAtTime(fr * 1.41, at);             // an inharmonic, metallic ratio
+      });
+      car.frequency.setValueAtTime(f0, t); mod.frequency.setValueAtTime(f0 * 1.41, t);
+      idx.gain.setValueAtTime(f0 * 0.4, t);
+      idx.gain.linearRampToValueAtTime(f0 * 2.2, L - 0.1);
+      idx.gain.linearRampToValueAtTime(0, L);
+      mod.connect(idx).connect(car.frequency);
+      const flutter = ctx.createOscillator(); flutter.type = 'square';
+      flutter.frequency.setValueAtTime(6, t);
+      flutter.frequency.exponentialRampToValueAtTime(48, L - 0.12);
+      const fa = ctx.createGain(); fa.gain.value = 0.5;
+      const sg = ctx.createGain(); sg.gain.value = 0.5;
+      flutter.connect(fa).connect(sg.gain);
+      const sv = ctx.createGain();
+      sv.gain.setValueAtTime(0, t + 0.2);
+      sv.gain.linearRampToValueAtTime(0.07, t + 0.5);
+      sv.gain.setValueAtTime(0.07, L - 0.2);
+      sv.gain.linearRampToValueAtTime(0, L - 0.12);
+      const svLp = ctx.createBiquadFilter(); svLp.type = 'lowpass'; svLp.frequency.value = 3200;
+      car.connect(sg).connect(svLp).connect(sv).connect(out);
+      [car, mod, flutter].forEach((o) => { o.start(t); o.stop(L + 0.05); });
+
+      // 3 · buffer stutter: the last piece of the stream repeats faster and faster
+      [0, 0.045, 0.078, 0.1].forEach((d, j) => {
+        const at = L - 0.12 + d;
+        const o = ctx.createOscillator(); o.type = 'square'; o.frequency.value = tones[3] * 2;
+        const g = ctx.createGain(); env(g, at, 0.05 + j * 0.012, 0.001, 0.012);
+        o.connect(g).connect(crush); o.start(at); o.stop(at + 0.04);
       });
 
-      // 3 · lock: a soft click, then the chord as one whole
-      const L = t + LOCK;
-      const n = ctx.createBufferSource(); n.buffer = this.noise;
-      const nb = ctx.createBiquadFilter(); nb.type = 'bandpass'; nb.frequency.value = 2400; nb.Q.value = 4;
-      const ng = ctx.createGain(); env(ng, L, 0.2, 0.001, 0.012);
-      n.connect(nb).connect(ng).connect(out); n.start(L, Math.random()); n.stop(L + 0.04);
-      targets.slice(0, 3).forEach((f, i) => {
-        const o = ctx.createOscillator(); o.type = i ? 'sine' : 'triangle'; o.frequency.value = f;
-        const g = ctx.createGain();
-        g.gain.setValueAtTime(0, L);
-        g.gain.linearRampToValueAtTime(0.065, L + 0.008);
-        g.gain.setTargetAtTime(0, L + 0.06, 0.55);
-        o.connect(g).connect(out); o.start(L); o.stop(L + 3);
+      // 4 · lock: a one-sample digital click, the chord as a block, then a two-tone confirm
+      const imp = ctx.createBuffer(1, 64, ctx.sampleRate); imp.getChannelData(0)[0] = 1; imp.getChannelData(0)[1] = -0.6;
+      const ck = ctx.createBufferSource(); ck.buffer = imp;
+      const ckg = ctx.createGain(); ckg.gain.value = 0.5;
+      const ckf = ctx.createBiquadFilter(); ckf.type = 'bandpass'; ckf.frequency.value = 3000; ckf.Q.value = 2;
+      ck.connect(ckf).connect(ckg).connect(out); ck.start(L);
+      const block = ctx.createBiquadFilter(); block.type = 'lowpass'; block.Q.value = 1.5;
+      block.frequency.setValueAtTime(5000, L);
+      block.frequency.exponentialRampToValueAtTime(900, L + 0.6);
+      const bg = ctx.createGain();
+      bg.gain.setValueAtTime(0, L);
+      bg.gain.linearRampToValueAtTime(0.07, L + 0.004);
+      bg.gain.setTargetAtTime(0, L + 0.05, 0.4);
+      block.connect(bg).connect(out);
+      tones.slice(0, 3).forEach((f, j) => {
+        const o = ctx.createOscillator(); o.type = j ? 'triangle' : 'square'; o.frequency.value = f;
+        o.connect(block); o.start(L); o.stop(L + 2.5);
+      });
+      [[tones[2] * 2, 0.16], [tones[0] * 4, 0.27]].forEach(([f, d]) => {
+        const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = f;
+        const g = ctx.createGain(); g.gain.setValueAtTime(0, L + d);
+        g.gain.linearRampToValueAtTime(0.045, L + d + 0.004);
+        g.gain.setValueAtTime(0.045, L + d + 0.07);
+        g.gain.linearRampToValueAtTime(0, L + d + 0.085);
+        o.connect(g).connect(out); o.start(L + d); o.stop(L + d + 0.12);
       });
       this.visual(L, 'birth', 0, 1);
       return L;
