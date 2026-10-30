@@ -87,28 +87,57 @@
     }
   };
 
+  /* phones: the poster is re-set for a narrow column — both big words keep one size
+     and fit the width with a margin (no clipped letters), the forms are a little larger,
+     and nothing sits under the corner buttons */
   const MOBILE = {
     name: 'mobile', W: 390, H: 844,
-    bg: { cx: 197.5, cy: 582.7, rx: 315.7, ry: 917.8 },
+    bg: { cx: 197.5, cy: 560, rx: 315.7, ry: 917.8 },
     vLines: [39, 143, 247, 351],
-    hLines: [44, 208, 468, 664, 800],
+    hLines: [44, 200, 470, 660, 800],
     texts: [
       { segs: [['web', 1]], cx: 195, by: 112, size: 60, width: 123.4 },
-      { segs: [['synth', 1], ['esizer', 0]], cx: 195, by: 168, size: 60, width: 306.4 },
-      { segs: [['ge', 0], ['o', 1], ['met', 0], ['r', 1], ['i', 0], ['c', 1]], cx: 195, by: 742, size: 74, width: 372.7 },
-      { segs: [['p', 0], ['e', 1], ['rform', 0], ['a', 1], ['nce', 0]], cx: 195, by: 809, size: 74, width: 474.8 }
+      { segs: [['synth', 1], ['esizer', 0]], cx: 195, by: 170, size: 60, width: 306.4 },
+      { segs: [['ge', 0], ['o', 1], ['met', 0], ['r', 1], ['i', 0], ['c', 1]], cx: 195, by: 726, size: 55, width: 277 },
+      { segs: [['p', 0], ['e', 1], ['rform', 0], ['a', 1], ['nce', 0]], cx: 195, by: 778, size: 55, width: 353 }
     ],
-    goods: { size: 30, width: 88.15, list: [[322, 110], [118, 306], [22, 604], [340, 510]] },
+    goods: { size: 28, width: 82.3, list: [[318, 100], [116, 252], [70, 620], [330, 664]] },
     cornerScale: 0.72,
     bodies: {
-      capsule: { home: [86, 262], s: 0.5 },
-      square: { home: [116, 410], s: 0.52 },
-      rect: { home: [326, 318], s: 0.55 },
-      circle: { home: [228, 412], s: 0.52 },
-      fx1: { home: [250, 236], s: 0.85 },
-      fx2: { home: [342, 668], s: 0.85 },
-      fx3: { home: [60, 792], s: 0.85 },
-      oval: { home: [286, 586], s: 0.6 }
+      capsule: { home: [92, 290], s: 0.56 },
+      square: { home: [112, 446], s: 0.6 },
+      rect: { home: [322, 268], s: 0.6 },
+      circle: { home: [241, 446], s: 0.6 },
+      fx1: { home: [250, 240], s: 0.9 },
+      fx2: { home: [344, 600], s: 0.9 },
+      fx3: { home: [58, 552], s: 0.9 },
+      oval: { home: [262, 604], s: 0.6 }
+    }
+  };
+
+  /* tablets and square windows: their own composition, larger forms and type */
+  const TABLET = {
+    name: 'tablet', W: 768, H: 1024,
+    bg: { cx: 390, cy: 640, rx: 640, ry: 1080 },
+    vLines: [60, 276, 492, 708],
+    hLines: [52, 300, 620, 840, 972],
+    texts: [
+      { segs: [['web', 1]], cx: 384, by: 150, size: 104, width: 214 },
+      { segs: [['synth', 1], ['esizer', 0]], cx: 384, by: 250, size: 104, width: 531 },
+      { segs: [['ge', 0], ['o', 1], ['met', 0], ['r', 1], ['i', 0], ['c', 1]], cx: 384, by: 838, size: 104, width: 524 },
+      { segs: [['p', 0], ['e', 1], ['rform', 0], ['a', 1], ['nce', 0]], cx: 384, by: 932, size: 104, width: 668 }
+    ],
+    goods: { size: 46, width: 135.2, list: [[636, 96], [330, 340], [120, 712], [650, 600]] },
+    cornerScale: 0.9,
+    bodies: {
+      capsule: { home: [150, 352], s: 0.85 },
+      square: { home: [228, 530], s: 0.92 },
+      rect: { home: [650, 330], s: 0.9 },
+      circle: { home: [426, 530], s: 0.92 },
+      fx1: { home: [470, 338], s: 1.1 },
+      fx2: { home: [672, 712], s: 1.1 },
+      fx3: { home: [96, 640], s: 1.1 },
+      oval: { home: [610, 712], s: 0.95 }
     }
   };
 
@@ -219,7 +248,7 @@
       this.goods = [];
       this.coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
       this.GEOM = GEOM;
-      this.LAYOUTS = { desktop: DESKTOP, mobile: MOBILE };
+      this.LAYOUTS = { desktop: DESKTOP, tablet: TABLET, mobile: MOBILE };
       this.buildBodies();
       this.buildCorners();
       this.buildTethers();
@@ -231,7 +260,7 @@
         const b = {
           id: def.id, kind: def.kind, type: def.type, fx: def.fx, def,
           el: el('div', 'body body--' + def.kind, this.bodiesLayer),
-          off: { desktop: [0, 0], mobile: [0, 0] },
+          off: { desktop: [0, 0], tablet: [0, 0], mobile: [0, 0] },
           vel: [0, 0], mode: 'rest', anchor: [0, 0],
           pulse: 0, jitter: 0, hover: false,
           px: { x: 0, y: 0, s: 1 }, last: '', rings: [], arrowAngle: 0, arrowLen: 1
@@ -392,7 +421,8 @@
     /* ---------------- layout ---------------- */
     pickLayout(vw, vh) {
       const ratio = vw / vh;
-      return ratio < 0.8 || (vw < 700 && ratio < 1.05) ? MOBILE : DESKTOP;
+      if (ratio < 1.05) return vw >= 600 && vh >= 600 ? TABLET : MOBILE;
+      return DESKTOP;
     }
 
     resize() {
