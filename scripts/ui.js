@@ -457,6 +457,16 @@
       return changed;
     }
 
+    /* round corner buttons as holes for the grid (centre + radius + a small gap) */
+    cornerHoles() {
+      const cs = this.s * this.layout.cornerScale, r = (60.165 * cs) / 2 + 5;
+      return CORNERS.map((c) => ({
+        x: c.anchor[1] === 'l' ? c.c[0] * cs : this.vw - c.c[0] * cs,
+        y: c.anchor[0] === 't' ? c.c[1] * cs : this.vh - c.c[1] * cs,
+        r
+      }));
+    }
+
     gridLines() {
       const L = this.layout;
       return { xs: L.vLines.map((x) => x * this.kx), ys: L.hLines.map((y) => y * this.ky) };

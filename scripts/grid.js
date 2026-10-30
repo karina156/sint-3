@@ -17,7 +17,7 @@
       this.canvas = canvas;
       this.ctx = canvas.getContext('2d');
       this.w = 0; this.h = 0; this.dpr = 1;
-      this.xs = []; this.ys = [];
+      this.xs = []; this.ys = []; this.holes = [];
       this.cells = [];
       this.t = 0;
       this.quietFrames = 0;
@@ -26,12 +26,13 @@
       this.color = '#2e2e2e';
     }
 
-    resize(w, h, xs, ys) {
+    resize(w, h, xs, ys, holes) {
       this.dpr = Math.min(window.devicePixelRatio || 1, 2);
       this.w = w; this.h = h;
       this.canvas.width = Math.round(w * this.dpr);
       this.canvas.height = Math.round(h * this.dpr);
       this.xs = xs.slice(); this.ys = ys.slice();
+      this.holes = holes || [];
       // cells = rectangles between consecutive lines (and the frame edges)
       const cx = [0].concat(xs, [w]), cy = [0].concat(ys, [h]);
       this.cells = [];
@@ -134,6 +135,14 @@
         }
       }
       g.stroke();
+      // the lines stop short of the round corner buttons — no line ever crosses a circle
+      if (this.holes.length) {
+        g.globalCompositeOperation = 'destination-out';
+        g.beginPath();
+        for (const h of this.holes) { g.moveTo(h.x + h.r, h.y); g.arc(h.x, h.y, h.r, 0, Math.PI * 2); }
+        g.fill();
+        g.globalCompositeOperation = 'source-over';
+      }
     }
   }
 

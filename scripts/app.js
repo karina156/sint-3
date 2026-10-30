@@ -401,7 +401,7 @@
       this.ui.resize();
       for (const b of this.ui.bodies) b.el.style.setProperty('--bw', (1 / Math.max(0.1, b.px.s)).toFixed(3) + 'px');
       const { xs, ys } = this.ui.gridLines();
-      this.grid.resize(this.ui.vw, this.ui.vh, xs, ys);
+      this.grid.resize(this.ui.vw, this.ui.vh, xs, ys, this.ui.cornerHoles());
       this.refresh();
       Screens.schedule();
     }
