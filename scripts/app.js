@@ -323,8 +323,6 @@
         }
       }
       this.stageEl.classList.toggle('doubler-off', !st.doubler.on);
-      const play = ui.corners.find((c) => c.def.id === 'play');
-      play.el.classList.toggle('is-calling', st.scene.active && !st.scene.playing && this.anyArmed());
     }
 
     /* ---------------- corners ---------------- */
@@ -336,17 +334,16 @@
           const y = e.clientY ? e.clientY - r.top : c.el.offsetTop;
           const st = this.state;
           switch (c.def.id) {
-            case 'play':
+            case 'louder':
+            case 'quieter': {
+              // the top corners are the master volume: about ±2 dB per press
               this.unlock();
-              if (!this.anyArmed()) { st.voices[GP.STORY_ROLES.HE].on = true; this.story.afterTap(this.ui.byId[GP.STORY_ROLES.HE]); }
-              this.resume();
-              this.syncAudio();
-              this.ui.announce('scene playing');
+              const k = c.def.id === 'louder' ? 1.26 : 1 / 1.26;
+              const v = Math.max(0.08, Math.min(1.3, (this.audio.userVolume || 0.85) * k));
+              this.audio.setMasterVolume(v);
+              this.ui.announce(`volume ${Math.round(v / 1.3 * 100)}%`);
               break;
-            case 'pause':
-              this.pause(450);
-              this.ui.announce('scene paused');
-              break;
+            }
             case 'kill': {
               if (this.story.scene === 'light') { this.story.finale(); this.ui.announce('finale'); break; }
               const had = this.anyArmed();

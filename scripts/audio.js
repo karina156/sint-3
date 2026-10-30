@@ -721,7 +721,7 @@
       }, ms + 120);
     }
     setMasterVolume(v) {
-      this.userVolume = clamp(v, 0, 1);
+      this.userVolume = clamp(v, 0, 1.3);
       if (this.ctx) glide(this.master.gain, this.userVolume, this.ctx, 0.05);
     }
 

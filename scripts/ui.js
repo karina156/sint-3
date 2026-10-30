@@ -113,10 +113,10 @@
   };
 
   const CORNERS = [
-    { id: 'play', ch: '+', anchor: 'tl', c: [35.172, 29.907], dx: -0.5, dy: 18.63, label: 'Play scene' },
-    { id: 'pause', ch: '-', anchor: 'tr', c: [32.989, 29.907], dx: 0, dy: 16.0, label: 'Pause scene' },
-    { id: 'kill', ch: 'k', anchor: 'bl', c: [35.172, 29.612], dx: 0, dy: 20.6, label: 'Finale: all voices end' },
-    { id: 'zero', ch: 'z', anchor: 'br', c: [32.989, 29.612], dx: 0, dy: 15.27, label: 'Start the story again' }
+    { id: 'louder', ch: '+', anchor: 'tl', c: [35.172, 29.907], dx: -0.5, dy: 18.63, label: 'Louder' },
+    { id: 'quieter', ch: '-', anchor: 'tr', c: [32.989, 29.907], dx: 0, dy: 16.0, label: 'Quieter' },
+    { id: 'kill', ch: 'f', anchor: 'bl', c: [35.172, 29.612], dx: 0, dy: 20.6, label: 'Finale: all voices end' },
+    { id: 'zero', ch: 'r', anchor: 'br', c: [32.989, 29.612], dx: 0, dy: 15.27, label: 'Restart the story' }
   ];
 
   /* ---------- body definitions ---------- */
