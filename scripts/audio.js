@@ -161,15 +161,15 @@
   /* -------- circle: she — the pad -------- */
   class PadVoice extends Voice {
     constructor(engine) {
-      super(engine, 'circle', { rev: 0.6, del: 0.08 }, 'she');
+      super(engine, 'circle', { rev: 0.32, del: 0.05 }, 'she');
       const ctx = engine.ctx;
       this.attackTau = 0.4; this.releaseTau = 0.55;          // she arrives and leaves softly
       this.filter = ctx.createBiquadFilter(); this.filter.type = 'lowpass';
       this.filter.frequency.value = 1000; this.filter.Q.value = 0.4;
       this.duckG = ctx.createGain();
-      this.shape = ctx.createGain(); this.shape.gain.value = 0.3;
-      this.filter.connect(this.duckG).connect(this.shape).connect(this.gate);
-      this.bedG = 0.8;
+      this.shape = ctx.createGain(); this.shape.gain.value = 0.17;   // the bed is quiet: the keys lead
+      this.filter.connect(this.shape).connect(this.duckG);
+      this.duckG.connect(this.gate);
       const mk = (type, detune, gain) => {
         const o = ctx.createOscillator(); o.type = type; o.detune.value = detune;
         const g = ctx.createGain(); g.gain.value = gain;
@@ -187,13 +187,8 @@
       this.top2 = mk('triangle', 2, 0.05);
       this.bright = this.top1;                                   // kept for the energy / timbre hooks
       // the filter breathes very slowly
-      this.lfo = ctx.createOscillator(); this.lfo.frequency.value = 0.06;
-      this.lfoAmt = ctx.createGain(); this.lfoAmt.gain.value = 60;
-      this.lfo.connect(this.lfoAmt).connect(this.filter.frequency); this.lfo.start();
       // the keys get their own warm, slightly dark output with a slow, barely there tremolo
-      this.keys = ctx.createGain(); this.keys.gain.value = 0.9;
-      const kt = ctx.createOscillator(); kt.frequency.value = 3.2; const kta = ctx.createGain(); kta.gain.value = 0.06;
-      kt.connect(kta).connect(this.keys.gain); kt.start();
+      this.keys = ctx.createGain(); this.keys.gain.value = 0.62;
       const kw = ctx.createBiquadFilter(); kw.type = 'lowshelf'; kw.frequency.value = 300; kw.gain.value = 3;
       this.keys.connect(kw).connect(this.duckG);
       this.timbre = 0.5;
@@ -201,26 +196,26 @@
       this.setTimbre(0.5);
     }
     chord(c, t) {
-      const ctx = this.engine.ctx, r = c.root * 2, tau = 0.5;
-      glide(this.root.o.frequency, r, ctx, tau, t);
-      glide(this.fifth.o.frequency, r * ratio(c.fifth), ctx, tau, t);
-      glide(this.third.o.frequency, r * 2 * ratio(c.third), ctx, tau, t);
-      glide(this.ninth.o.frequency, r * ratio(c.ninth), ctx, tau, t);
-      glide(this.sub.o.frequency, r / 2, ctx, tau, t);
-      glide(this.top1.o.frequency, r * 2 * ratio(c.fifth), ctx, tau, t);
-      glide(this.top2.o.frequency, r * 4, ctx, tau, t);
+      const ctx = this.engine.ctx, r = c.root * 2;
+      t = Math.max(t, ctx.currentTime);
+      const fr = [[this.root, r], [this.fifth, r * ratio(c.fifth)], [this.third, r * 2 * ratio(c.third)],
+        [this.ninth, r * ratio(c.ninth)], [this.sub, r / 2], [this.top1, r * 2 * ratio(c.fifth)], [this.top2, r * 4]];
+      const g = this.shape.gain, lvl = 0.17;
+      g.cancelScheduledValues(t); g.setValueAtTime(g.value || lvl, t);
+      g.linearRampToValueAtTime(0.0001, t + 0.05);                       // fade out…
+      fr.forEach(([v, f]) => { v.o.frequency.cancelScheduledValues(t); v.o.frequency.setValueAtTime(f, t + 0.05); });   // …change…
+      g.linearRampToValueAtTime(lvl, t + 0.25);                           // …fade in: no sliding pitch
     }
     /* the arrow adds light: a brighter filter and a little more of the flute on top */
     setTimbre(t) {
       this.timbre = t = clamp(t, 0, 1);
       const ctx = this.engine.ctx;
-      glide(this.filter.frequency, 600 * Math.pow(3.5, t), ctx, 0.1);
+      glide(this.filter.frequency, 500 * Math.pow(3, t), ctx, 0.1);
       glide(this.root.g.gain, 0.42 - 0.1 * t, ctx, 0.1);
       glide(this.fifth.g.gain, 0.16 + 0.08 * t, ctx, 0.1);
       glide(this.third.g.gain, 0.14 + 0.08 * t, ctx, 0.1);
       glide(this.top1.g.gain, 0.03 + 0.07 * t, ctx, 0.1);
       glide(this.top2.g.gain, 0.02 + 0.05 * t, ctx, 0.1);
-      glide(this.lfoAmt.gain, 40 + 50 * t, ctx, 0.2);
       if (this.engine.voices.oval) this.engine.voices.oval.follow(t);
     }
     /* cozy keys: every half bar she rolls the chord softly, like felt on an electric piano */
@@ -241,7 +236,7 @@
         wg.gain.value = 0.18; tg.gain.value = 0;
         body.connect(g); warm.connect(wg).connect(g); tine.connect(tg).connect(g); g.connect(lp).connect(this.keys);
         const peak = (0.16 - i * 0.02) * soft;
-        g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(peak, at + 0.012); g.gain.setTargetAtTime(0, at + 0.03, 0.9);
+        g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(peak, at + 0.012); g.gain.setTargetAtTime(0, at + 0.03, 0.6);
         tg.gain.setValueAtTime(0.012 * soft, at); tg.gain.setTargetAtTime(0, at, 0.05);   // a tiny felt "tick"
         [body, warm, tine].forEach((o) => { o.start(at); o.stop(at + 4); });
       });
@@ -529,7 +524,7 @@
     chord(c, t) {
       const ctx = this.engine.ctx, f = c.root * this.mul;
       const fr = { third: f * ratio(c.third), fifth: f * ratio(c.fifth), octave: f * 2 };
-      this.tones.forEach((x) => x.oscs.forEach((o) => glide(o.frequency, fr[x.name], ctx, 0.25, t)));
+      this.tones.forEach((x) => x.oscs.forEach((o) => glide(o.frequency, fr[x.name], ctx, 0.025, t)));
     }
     setLevel(l) {
       if (Math.abs(l - this.target) < 0.004) return;
@@ -791,7 +786,7 @@
         for (const v of this.voicesOn(c)) v.chord(chord, t);
         if (c.id === 'he') {
           this.hybrids.forEach((h) => h.chord(chord, t));
-          if (this.drone) this.drone.forEach((d) => glide(d.o.frequency, chord.root / 2 * d.m, this.ctx, 0.8, t));
+          if (this.drone) this.drone.forEach((d) => glide(d.o.frequency, chord.root / 2 * d.m, this.ctx, 0.03, t));
         }
       }
       const vs = this.voicesOn(c);
