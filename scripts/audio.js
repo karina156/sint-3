@@ -142,7 +142,7 @@
       if (on === this.on) return on ? this.onAt : this.offAt;
       this.on = on;
       if (on) this.onAt = at; else this.offAt = at;
-      glide(this.gate.gain, on ? 1 : 0, this.engine.ctx, on ? 0.08 : 0.18, at);
+      glide(this.gate.gain, on ? 1 : 0, this.engine.ctx, on ? (this.attackTau || 0.08) : (this.releaseTau || 0.18), at);
       return at;
     }
     active(t) { return this.on ? t >= this.onAt - 1e-4 : t < this.offAt - 1e-4; }
@@ -161,53 +161,62 @@
   /* -------- circle: she — the pad -------- */
   class PadVoice extends Voice {
     constructor(engine) {
-      super(engine, 'circle', { rev: 0.55, del: 0.08 }, 'she');
+      super(engine, 'circle', { rev: 0.7, del: 0.1 }, 'she');
       const ctx = engine.ctx;
+      this.attackTau = 0.45; this.releaseTau = 0.6;          // she arrives and leaves like a breath
       this.filter = ctx.createBiquadFilter(); this.filter.type = 'lowpass';
-      this.filter.frequency.value = 800; this.filter.Q.value = 0.7;
+      this.filter.frequency.value = 900; this.filter.Q.value = 0.5;
       this.duckG = ctx.createGain();
       this.shape = ctx.createGain(); this.shape.gain.value = 0.3;
       this.filter.connect(this.duckG).connect(this.shape).connect(this.gate);
-      const mk = (type, detune, gain) => {
-        const o = ctx.createOscillator(); o.type = type; o.detune.value = detune;
+      const mk = (detune, gain) => {
+        const o = ctx.createOscillator(); o.type = 'sine'; o.detune.value = detune;
         const g = ctx.createGain(); g.gain.value = gain;
         o.connect(g).connect(this.filter); o.start();
         return { o, g };
       };
-      this.root = mk('sine', -3, 0.5);
-      this.fifth = mk('triangle', 2, 0.2);
-      this.third = mk('sine', 4, 0.15);
-      this.ninth = mk('sine', -2, 0.05);
-      this.bright = mk('triangle', 7, 0);
-      this.sub = mk('sine', 0, 0.22);
-      this.lfo = ctx.createOscillator(); this.lfo.frequency.value = 0.08;
-      this.lfoAmt = ctx.createGain(); this.lfoAmt.gain.value = 120;
+      // a soft bed of pure sines: root, fifth, third, ninth, a gentle octave glow, a light sub
+      this.root = mk(-3, 0.4);
+      this.fifth = mk(2, 0.18);
+      this.third = mk(4, 0.16);
+      this.ninth = mk(-2, 0.04);
+      this.bright = mk(6, 0);
+      this.sub = mk(0, 0.08);
+      this.lfo = ctx.createOscillator(); this.lfo.frequency.value = 0.07;
+      this.lfoAmt = ctx.createGain(); this.lfoAmt.gain.value = 80;
       this.lfo.connect(this.lfoAmt).connect(this.filter.frequency); this.lfo.start();
-      // her voice: a soft choir — a buzz through two vowel formants ("oo" → "ah" with the arrow)
+      // her voice: a soprano choir — a softened buzz through female vowel formants ("у" → "а" with the arrow)
       this.voiceSrc = ctx.createOscillator(); this.voiceSrc.type = 'sawtooth';
-      this.voiceSrc2 = ctx.createOscillator(); this.voiceSrc2.type = 'sawtooth'; this.voiceSrc2.detune.value = 9;
-      const vib = ctx.createOscillator(); vib.frequency.value = 4.6;
-      this.vibAmt = ctx.createGain(); this.vibAmt.gain.value = 5;
+      this.voiceSrc2 = ctx.createOscillator(); this.voiceSrc2.type = 'sawtooth'; this.voiceSrc2.detune.value = 7;
+      const vib = ctx.createOscillator(); vib.frequency.value = 5.2;
+      this.vibAmt = ctx.createGain(); this.vibAmt.gain.value = 6;
       vib.connect(this.vibAmt); this.vibAmt.connect(this.voiceSrc.detune); this.vibAmt.connect(this.voiceSrc2.detune); vib.start();
+      const soften = ctx.createBiquadFilter(); soften.type = 'lowpass'; soften.frequency.value = 1900; soften.Q.value = 0.4;
       this.voiceMix = ctx.createGain(); this.voiceMix.gain.value = 0.5;
-      this.voiceSrc.connect(this.voiceMix); this.voiceSrc2.connect(this.voiceMix);
+      this.voiceSrc.connect(this.voiceMix); this.voiceSrc2.connect(this.voiceMix); this.voiceMix.connect(soften);
+      this.choir = ctx.createGain(); this.choir.gain.value = 0;
       const fm = (q, g) => {
         const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = q;
         const gg = ctx.createGain(); gg.gain.value = g;
-        this.voiceMix.connect(f).connect(gg).connect(this.choir);
+        soften.connect(f).connect(gg).connect(this.choir);
         return f;
       };
-      this.choir = ctx.createGain(); this.choir.gain.value = 0;
-      this.F1 = fm(7, 1.0); this.F2 = fm(9, 0.55); this.F3 = fm(11, 0.18);
-      const choirLp = ctx.createBiquadFilter(); choirLp.type = 'lowpass'; choirLp.frequency.value = 3000;
+      this.F1 = fm(6, 1.0); this.F2 = fm(8, 0.5); this.F3 = fm(10, 0.12);
+      const choirLp = ctx.createBiquadFilter(); choirLp.type = 'lowpass'; choirLp.frequency.value = 3200;
       this.choir.connect(choirLp).connect(this.duckG);
       this.voiceSrc.start(); this.voiceSrc2.start();
-      // breath: airy noise in the same vowel, swelling slowly
+      // a glassy halo an octave above, breathing slowly
+      this.halo = [-6, 6].map((dt) => { const o = ctx.createOscillator(); o.type = 'sine'; o.detune.value = dt; o.start(); return o; });
+      const hg = ctx.createGain(); hg.gain.value = 0.022;
+      const hl = ctx.createOscillator(); hl.frequency.value = 0.21; const hla = ctx.createGain(); hla.gain.value = 0.012;
+      hl.connect(hla).connect(hg.gain); hl.start();
+      this.halo.forEach((o) => o.connect(hg)); hg.connect(this.duckG);
+      // breath: airy, high and very quiet
       this.breath = ctx.createBufferSource(); this.breath.buffer = engine.noise; this.breath.loop = true;
-      this.breathF = ctx.createBiquadFilter(); this.breathF.type = 'bandpass'; this.breathF.Q.value = 1.6;
-      this.breathG = ctx.createGain(); this.breathG.gain.value = 0.012;
-      const bl = ctx.createOscillator(); bl.frequency.value = 0.13;
-      const bla = ctx.createGain(); bla.gain.value = 0.008;
+      this.breathF = ctx.createBiquadFilter(); this.breathF.type = 'bandpass'; this.breathF.Q.value = 1.2;
+      this.breathG = ctx.createGain(); this.breathG.gain.value = 0.008;
+      const bl = ctx.createOscillator(); bl.frequency.value = 0.11;
+      const bla = ctx.createGain(); bla.gain.value = 0.005;
       bl.connect(bla).connect(this.breathG.gain); bl.start();
       this.breath.connect(this.breathF).connect(this.breathG).connect(this.duckG); this.breath.start();
       this.timbre = 0.5;
@@ -215,41 +224,42 @@
       this.setTimbre(0.5);
     }
     chord(c, t) {
-      const ctx = this.engine.ctx, r = c.root * 2, tau = 0.35;
+      const ctx = this.engine.ctx, r = c.root * 2, tau = 0.5;
       glide(this.root.o.frequency, r, ctx, tau, t);
       glide(this.fifth.o.frequency, r * ratio(c.fifth), ctx, tau, t);
       glide(this.third.o.frequency, r * 2 * ratio(c.third), ctx, tau, t);
       glide(this.ninth.o.frequency, r * ratio(c.ninth), ctx, tau, t);
-      glide(this.bright.o.frequency, r, ctx, tau, t);
+      glide(this.bright.o.frequency, r * 2, ctx, tau, t);
       glide(this.sub.o.frequency, r / 2, ctx, tau, t);
-      glide(this.voiceSrc.frequency, r * ratio(c.fifth), ctx, tau, t);
+      glide(this.voiceSrc.frequency, r * 2 * ratio(c.fifth), ctx, tau, t);       // soprano: an octave up
       glide(this.voiceSrc2.frequency, r * 2 * ratio(c.third), ctx, tau, t);
+      this.halo.forEach((o) => glide(o.frequency, r * 4 * ratio(c.third), ctx, tau, t));
     }
     setTimbre(t) {
       this.timbre = t = clamp(t, 0, 1);
       const ctx = this.engine.ctx;
-      glide(this.filter.frequency, 320 * Math.pow(7, t), ctx, 0.06);
-      glide(this.filter.Q, 0.6 + t * 1.2, ctx, 0.06);
-      glide(this.root.g.gain, 0.55 - 0.22 * t, ctx, 0.06);
-      glide(this.fifth.g.gain, 0.13 + 0.2 * t, ctx, 0.06);
-      glide(this.third.g.gain, 0.1 + 0.12 * t, ctx, 0.06);
-      glide(this.bright.g.gain, 0.09 * t * t, ctx, 0.06);
-      glide(this.lfoAmt.gain, 40 + 120 * t, ctx, 0.2);
-      // vowel: oo (300/870/2240) → oh (500/900/2400) → ah (730/1090/2440)
+      glide(this.filter.frequency, 420 * Math.pow(5, t), ctx, 0.08);
+      glide(this.filter.Q, 0.5 + t * 0.5, ctx, 0.08);
+      glide(this.root.g.gain, 0.42 - 0.12 * t, ctx, 0.08);
+      glide(this.fifth.g.gain, 0.14 + 0.1 * t, ctx, 0.08);
+      glide(this.third.g.gain, 0.12 + 0.08 * t, ctx, 0.08);
+      glide(this.bright.g.gain, 0.05 * t, ctx, 0.08);
+      glide(this.lfoAmt.gain, 40 + 70 * t, ctx, 0.2);
+      // female vowels: у (370/950/2670) → о (450/850/2830) → а (850/1220/2810)
       const mix = (a, b) => a + (b - a) * t;
-      glide(this.F1.frequency, mix(300, 730), ctx, 0.12);
-      glide(this.F2.frequency, mix(870, 1090), ctx, 0.12);
-      glide(this.F3.frequency, mix(2240, 2440), ctx, 0.12);
-      glide(this.breathF.frequency, mix(900, 1500), ctx, 0.12);
-      glide(this.choir.gain, 0.08 + 0.07 * t, ctx, 0.1);
+      glide(this.F1.frequency, mix(370, 850), ctx, 0.15);
+      glide(this.F2.frequency, mix(950, 1220), ctx, 0.15);
+      glide(this.F3.frequency, mix(2670, 2810), ctx, 0.15);
+      glide(this.breathF.frequency, mix(2200, 3200), ctx, 0.15);
+      glide(this.choir.gain, 0.055 + 0.05 * t, ctx, 0.12);
       if (this.engine.voices.oval) this.engine.voices.oval.follow(t);
     }
-    setEnergy(e) { glide(this.ninth.g.gain, 0.03 + 0.14 * e, this.engine.ctx, 1.5); }
+    setEnergy(e) { glide(this.ninth.g.gain, 0.02 + 0.08 * e, this.engine.ctx, 1.5); }
     setVolume(v) { glide(this.vol.gain, v * v, this.engine.ctx, 0.05); }
     duck(t, amt) {
       const g = this.duckG.gain;
-      g.setTargetAtTime(1 - amt * 0.45, t, 0.012);
-      g.setTargetAtTime(1, t + 0.04, 0.18);
+      g.setTargetAtTime(1 - amt * 0.3, t, 0.02);
+      g.setTargetAtTime(1, t + 0.05, 0.25);
     }
   }
 
