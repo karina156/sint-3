@@ -163,11 +163,11 @@
     constructor(engine) {
       super(engine, 'circle', { rev: 0.32, del: 0.05 }, 'she');
       const ctx = engine.ctx;
-      this.attackTau = 0.4; this.releaseTau = 0.55;          // she arrives and leaves softly
+      this.attackTau = 0.15; this.releaseTau = 0.55;         // she answers quickly and leaves softly
       this.filter = ctx.createBiquadFilter(); this.filter.type = 'lowpass';
       this.filter.frequency.value = 1000; this.filter.Q.value = 0.4;
       this.duckG = ctx.createGain();
-      this.shape = ctx.createGain(); this.shape.gain.value = 0.17;   // the bed is quiet: the keys lead
+      this.shape = ctx.createGain(); this.shape.gain.value = 0.24;   // a calm sustained bed under the tap
       this.filter.connect(this.shape).connect(this.duckG);
       this.duckG.connect(this.gate);
       const mk = (type, detune, gain) => {
@@ -190,7 +190,7 @@
       // the keys get their own warm, slightly dark output with a slow, barely there tremolo
       this.keys = ctx.createGain(); this.keys.gain.value = 0.62;
       const kw = ctx.createBiquadFilter(); kw.type = 'lowshelf'; kw.frequency.value = 300; kw.gain.value = 3;
-      this.keys.connect(kw).connect(this.duckG);
+      this.keys.connect(kw).connect(this.vol);          // the tap's chord sounds at once, not behind the slow swell
       this.timbre = 0.5;
       this.chord(engine.clocks.she.chord, ctx.currentTime);
       this.setTimbre(0.5);
@@ -200,7 +200,7 @@
       t = Math.max(t, ctx.currentTime);
       const fr = [[this.root, r], [this.fifth, r * ratio(c.fifth)], [this.third, r * 2 * ratio(c.third)],
         [this.ninth, r * ratio(c.ninth)], [this.sub, r / 2], [this.top1, r * 2 * ratio(c.fifth)], [this.top2, r * 4]];
-      const g = this.shape.gain, lvl = 0.17;
+      const g = this.shape.gain, lvl = 0.24;
       g.cancelScheduledValues(t); g.setValueAtTime(g.value || lvl, t);
       g.linearRampToValueAtTime(0.0001, t + 0.05);                       // fade out…
       fr.forEach(([v, f]) => { v.o.frequency.cancelScheduledValues(t); v.o.frequency.setValueAtTime(f, t + 0.05); });   // …change…
@@ -218,27 +218,24 @@
       glide(this.top2.g.gain, 0.02 + 0.05 * t, ctx, 0.1);
       if (this.engine.voices.oval) this.engine.voices.oval.follow(t);
     }
-    /* cozy keys: every half bar she rolls the chord softly, like felt on an electric piano */
-    step(s, t, c) {
-      if (!this.active(t)) return;
-      const q = s % 16;
-      if (q !== 0 && q !== 8) return;
-      const ctx = this.engine.ctx, soft = q === 0 ? 1 : 0.7;
-      const notes = [c.note(0, 1), c.note(4, 1), c.note(2, 2), c.note(4, 2)];
-      if (Math.floor(s / 16) % 2) notes[3] = c.note(0, 3);   // every other bar the top note opens up
-      notes.forEach((f, i) => {
-        const at = t + i * 0.045 * (1.2 - this.timbre * 0.4);
+    /* a tap is a sound, not a melody: she answers at once with one soft, warm chord
+       (felt keys, all notes together) and then simply sustains */
+    setOn(on, at) {
+      const ctx = this.engine.ctx, now = ctx.currentTime + 0.01;
+      if (on && !this.on) this.strike(now);
+      return super.setOn(on, now);
+    }
+    strike(at) {
+      const ctx = this.engine.ctx, c = this.engine.clockOf(this).chord;
+      [c.note(0, 1), c.note(4, 1), c.note(2, 2), c.note(4, 2)].forEach((f, i) => {
+        const t = at + i * 0.006;                                  // together, only a breath apart
         const body = ctx.createOscillator(); body.type = 'sine'; body.frequency.value = f;
         const warm = ctx.createOscillator(); warm.type = 'sine'; warm.frequency.value = f * 2;
-        const tine = ctx.createOscillator(); tine.type = 'sine'; tine.frequency.value = f * 7;
-        const g = ctx.createGain(), wg = ctx.createGain(), tg = ctx.createGain();
-        const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 900 + 1400 * this.timbre; lp.Q.value = 0.3;
-        wg.gain.value = 0.18; tg.gain.value = 0;
-        body.connect(g); warm.connect(wg).connect(g); tine.connect(tg).connect(g); g.connect(lp).connect(this.keys);
-        const peak = (0.16 - i * 0.02) * soft;
-        g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(peak, at + 0.012); g.gain.setTargetAtTime(0, at + 0.03, 0.6);
-        tg.gain.setValueAtTime(0.012 * soft, at); tg.gain.setTargetAtTime(0, at, 0.05);   // a tiny felt "tick"
-        [body, warm, tine].forEach((o) => { o.start(at); o.stop(at + 4); });
+        const g = ctx.createGain(), wg = ctx.createGain(); wg.gain.value = 0.16;
+        const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1100 + 1200 * this.timbre; lp.Q.value = 0.3;
+        body.connect(g); warm.connect(wg).connect(g); g.connect(lp).connect(this.keys);
+        g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.15 - i * 0.015, t + 0.01); g.gain.setTargetAtTime(0, t + 0.03, 0.7);
+        [body, warm].forEach((o) => { o.start(t); o.stop(t + 4); });
       });
     }
     setEnergy(e) { glide(this.ninth.g.gain, 0.02 + 0.06 * e, this.engine.ctx, 1.5); }
@@ -702,7 +699,7 @@
       clearTimeout(this._suspendTimer);
       if (ctx.state !== 'running') ctx.resume();
       this.scenePlaying = true;
-      rampTo(this.scene.gain, 1, ctx, 0.3);
+      rampTo(this.scene.gain, 1, ctx, 0.06);
       this.startTransport();
     }
     stopScene(ms = 450) {
